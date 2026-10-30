@@ -1,0 +1,48 @@
+# Planning docs (internal, not for the public repo)
+docs/
+TailorFit — 15-Phase Build Plan.md
+
+# Pilot and benchmark data: real people's photos, tape values, consent forms
+data/
+*.consent.*
+
+# Secrets and environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+.next/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+coverage/
+
+# Model weights and large artifacts
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.npz
+*.obj
+*.ply
+
+# Uploads and generated output
+uploads/
+tmp/
+eval/results/*.csv
+eval/results/*.json
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.log
