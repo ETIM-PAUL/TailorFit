@@ -1,0 +1,103 @@
+{
+  "request_id": "req_example",
+  "created_at": "2026-10-30T12:00:00Z",
+  "stub": true,
+  "measurements": [
+    {
+      "name": "bust_chest",
+      "value_cm": 80.0,
+      "value_in": 31.5,
+      "confidence_score": 0.5,
+      "confidence_label": "medium",
+      "reason": "stub value"
+    },
+    {
+      "name": "waist",
+      "value_cm": 80.0,
+      "value_in": 31.5,
+      "confidence_score": 0.5,
+      "confidence_label": "medium",
+      "reason": "stub value"
+    },
+    {
+      "name": "hip",
+      "value_cm": 80.0,
+      "value_in": 31.5,
+      "confidence_score": 0.5,
+      "confidence_label": "medium",
+      "reason": "stub value"
+    },
+    {
+      "name": "neck",
+      "value_cm": 80.0,
+      "value_in": 31.5,
+      "confidence_score": 0.5,
+      "confidence_label": "medium",
+      "reason": "stub value"
+    },
+    {
+      "name": "arm_round",
+      "value_cm": 80.0,
+      "value_in": 31.5,
+      "confidence_score": 0.5,
+      "confidence_label": "medium",
+      "reason": "stub value"
+    },
+    {
+      "name": "thigh",
+      "value_cm": 80.0,
+      "value_in": 31.5,
+      "confidence_score": 0.5,
+      "confidence_label": "medium",
+      "reason": "stub value"
+    },
+    {
+      "name": "shoulder_width",
+      "value_cm": 80.0,
+      "value_in": 31.5,
+      "confidence_score": 0.5,
+      "confidence_label": "medium",
+      "reason": "stub value"
+    },
+    {
+      "name": "sleeve_length",
+      "value_cm": 80.0,
+      "value_in": 31.5,
+      "confidence_score": 0.5,
+      "confidence_label": "medium",
+      "reason": "stub value"
+    },
+    {
+      "name": "top_length",
+      "value_cm": 80.0,
+      "value_in": 31.5,
+      "confidence_score": 0.5,
+      "confidence_label": "medium",
+      "reason": "stub value"
+    },
+    {
+      "name": "trouser_length",
+      "value_cm": 80.0,
+      "value_in": 31.5,
+      "confidence_score": 0.5,
+      "confidence_label": "medium",
+      "reason": "stub value"
+    },
+    {
+      "name": "inseam",
+      "value_cm": 80.0,
+      "value_in": 31.5,
+      "confidence_score": 0.5,
+      "confidence_label": "medium",
+      "reason": "stub value"
+    },
+    {
+      "name": "back_length",
+      "value_cm": 80.0,
+      "value_in": 31.5,
+      "confidence_score": 0.5,
+      "confidence_label": "medium",
+      "reason": "stub value"
+    }
+  ]
+}

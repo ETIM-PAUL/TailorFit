@@ -1,0 +1,18 @@
+{
+  "request_id": "req_example",
+  "customer_id": "cust_1",
+  "height_cm": 170,
+  "consent": true,
+  "locale": "en",
+  "keep_photos": false,
+  "photos": {
+    "front": {
+      "url": "https://example.com/front.jpg",
+      "tilt_degrees": 1.2
+    },
+    "side": {
+      "url": "https://example.com/side.jpg",
+      "tilt_degrees": 0.8
+    }
+  }
+}

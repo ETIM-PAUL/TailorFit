@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tailorfit.app/contract.schema.json",
+  "title": "TailorFit shared data contract",
+  "description": "Every service reads and writes these shapes. Changes go through the lead.",
+  "$defs": {
+    "MeasurementName": {
+      "enum": [
+        "bust_chest", "waist", "hip", "neck", "arm_round", "thigh",
+        "shoulder_width", "sleeve_length", "top_length", "trouser_length", "inseam", "back_length"
+      ]
+    },
+    "ConfidenceLabel": { "enum": ["high", "medium", "low"] },
+    "View": { "enum": ["front", "side"] },
+    "Locale": { "enum": ["en", "pcm"] },
+
+    "CaptureRequest": {
+      "type": "object",
+      "required": ["request_id", "height_cm", "consent", "photos"],
+      "additionalProperties": false,
+      "properties": {
+        "request_id": { "type": "string" },
+        "customer_id": { "type": "string" },
+        "height_cm": { "type": "number", "minimum": 100, "maximum": 230 },
+        "consent": { "const": true },
+        "locale": { "$ref": "#/$defs/Locale", "default": "en" },
+        "keep_photos": { "type": "boolean", "default": false },
+        "photos": {
+          "type": "object",
+          "required": ["front", "side"],
+          "additionalProperties": false,
+          "properties": {
+            "front": { "$ref": "#/$defs/Photo" },
+            "side": { "$ref": "#/$defs/Photo" }
+          }
+        },
+        "style_id": { "type": "string" },
+        "fabric_photo_url": { "type": "string" }
+      }
+    },
+    "Photo": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string" },
+        "tilt_degrees": { "type": "number" },
+        "a4_in_frame": { "type": "boolean" }
+      }
+    },
+
+    "QualityVerdict": {
+      "type": "object",
+      "required": ["view", "passed", "issues"],
+      "additionalProperties": false,
+      "properties": {
+        "view": { "$ref": "#/$defs/View" },
+        "passed": { "type": "boolean" },
+        "borderline": { "type": "boolean", "description": "Passed, but should lower confidence downstream." },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["code", "message"],
+            "additionalProperties": false,
+            "properties": {
+              "code": { "enum": ["loose_clothing", "posture", "arms_touching_body", "lighting", "occlusion", "not_full_body", "tilted"] },
+              "message": { "type": "string", "description": "Plain-language reason and fix, in the request locale." }
+            }
+          }
+        }
+      }
+    },
+
+    "SegmentationOutput": {
+      "type": "object",
+      "required": ["request_id", "views"],
+      "additionalProperties": false,
+      "properties": {
+        "request_id": { "type": "string" },
+        "views": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["view", "mask_url", "face_blurred", "mask_quality"],
+            "additionalProperties": false,
+            "properties": {
+              "view": { "$ref": "#/$defs/View" },
+              "mask_url": { "type": "string" },
+              "blurred_photo_url": { "type": "string" },
+              "face_blurred": { "type": "boolean" },
+              "mask_quality": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          }
+        }
+      }
+    },
+
+    "BodyOutput": {
+      "type": "object",
+      "required": ["request_id", "body_url", "fitted_height_cm", "scale_source"],
+      "additionalProperties": false,
+      "properties": {
+        "request_id": { "type": "string" },
+        "body_url": { "type": "string", "description": "Fitted 3D body for the measurement step." },
+        "preview_url": { "type": "string", "description": "Quick 3D view for debugging and the demo." },
+        "fitted_height_cm": { "type": "number" },
+        "scale_source": { "enum": ["stated_height", "a4_cross_checked"] },
+        "front_side_agreement": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+
+    "Measurement": {
+      "type": "object",
+      "required": ["name", "value_cm", "value_in", "confidence_score", "confidence_label", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/MeasurementName" },
+        "value_cm": { "type": "number" },
+        "value_in": { "type": "number" },
+        "confidence_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "confidence_label": { "$ref": "#/$defs/ConfidenceLabel" },
+        "reason": { "type": "string", "description": "e.g. 'hip partly hidden by arm'" },
+        "tailor_value_cm": { "type": "number", "description": "Tailor's edit, stored beside the original." }
+      }
+    },
+
+    "MeasurementSheet": {
+      "type": "object",
+      "required": ["request_id", "created_at", "measurements"],
+      "additionalProperties": false,
+      "properties": {
+        "request_id": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "stub": { "type": "boolean", "description": "True while values are fake." },
+        "measurements": {
+          "type": "array",
+          "minItems": 12,
+          "maxItems": 12,
+          "items": { "$ref": "#/$defs/Measurement" }
+        }
+      }
+    }
+  }
+}
