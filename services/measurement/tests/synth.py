@@ -20,7 +20,7 @@ def interp(table, f):
     return float(np.interp(f, xs, ys))
 
 
-def make(height_cm=170.0, arms_apart=True, legs_apart=True):
+def make(height_cm=170.0, arms_apart=True, legs_apart=True, merge_above=None):
     scale = height_cm / (BOTTOM - TOP + 1)
     cm = lambda x: x / scale  # noqa: E731
     front = np.zeros((H_IMG, W_IMG), bool)
@@ -40,7 +40,7 @@ def make(height_cm=170.0, arms_apart=True, legs_apart=True):
             front[y, int(round(cx - gap - lw)): int(round(cx - gap))] = True
         if ARM_BOTTOM <= f <= ARM_TOP:
             half = cm(interp(TORSO_W, max(f, CROTCH)) / 2) if f >= CROTCH else cm(17)
-            gap = cm(ARM_GAP) if arms_apart else 0
+            gap = cm(ARM_GAP) if arms_apart and not (merge_above is not None and f > merge_above) else 0
             a0, a1 = half + gap, half + gap + cm(ARM_W)
             front[y, int(round(cx + a0)): int(round(cx + a1))] = True
             front[y, int(round(cx - a1)): int(round(cx - a0))] = True

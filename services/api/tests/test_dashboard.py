@@ -1,5 +1,7 @@
 import io
 
+from tests.imgs import GOOD
+
 import pytest
 from fastapi.testclient import TestClient
 from pypdf import PdfReader
@@ -9,7 +11,7 @@ from app.main import app
 
 SHEET_VALUES = dict(bust_chest=92, waist=76, hip=98, neck=37, arm_round=29, thigh=56, shoulder_width=42,
                     sleeve_length=60, top_length=70, trouser_length=102, inseam=78, back_length=41)
-JPEG = b"\xff\xd8dummy"
+JPEG = GOOD
 
 
 def fake_sheet(blurred=True):

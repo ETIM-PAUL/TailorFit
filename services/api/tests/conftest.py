@@ -9,3 +9,11 @@ import tempfile
 _tmp = tempfile.mkdtemp(prefix="tailorfit-tests-")
 os.environ.setdefault("TAILORFIT_DB", os.path.join(_tmp, "tests.db"))
 os.environ.setdefault("TAILORFIT_PHOTOS", os.path.join(_tmp, "photos"))
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    from app import security
+    security.reset_limits()

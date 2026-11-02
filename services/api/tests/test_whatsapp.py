@@ -1,6 +1,8 @@
 import hashlib
 import hmac
 import io
+
+from tests.imgs import GOOD
 import json
 
 import httpx
@@ -11,7 +13,7 @@ from app import auth, store, whatsapp
 from app.main import app
 
 SECRET = "app-secret-123"
-JPEG = b"\xff\xd8dummy"
+JPEG = GOOD
 
 
 @pytest.fixture
@@ -287,7 +289,7 @@ def test_send_falls_back_to_the_page_origin_when_no_public_url(tailor, sent, mon
     monkeypatch.delenv("PUBLIC_BASE_URL")
     o = order()
     assert tailor.post(f"/v1/orders/{o['id']}/send-whatsapp").status_code == 422
-    r = tailor.post(f"/v1/orders/{o['id']}/send-whatsapp", headers={"Origin": "https://abc.trycloudflare.com"})
+    r = tailor.post(f"/v1/orders/{o['id']}/send-whatsapp", headers={"Origin": "https://abc.trycloudflare.com", "Host": "abc.trycloudflare.com"})
     assert r.status_code == 200 and "https://abc.trycloudflare.com/capture/?order=" in sent[0]["text"]["body"]
 
 

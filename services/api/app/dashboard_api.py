@@ -1,4 +1,6 @@
 """Tailor dashboard API (login, orders, edits, cutting sheet) and the customer's own capture-link endpoints."""
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import Response as RawResponse
 from pydantic import BaseModel, Field
@@ -69,7 +71,8 @@ class Login(BaseModel):
 def login(body: Login, request: Request, response: Response):
     token = auth.login(body.username, body.password, request.client.host if request.client else "?")
     response.set_cookie(auth.COOKIE, token, httponly=True, samesite="lax", max_age=auth.SESSION_SECONDS,
-                        secure=request.url.scheme == "https")
+                        secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+                        or os.environ.get("COOKIE_SECURE") == "1")
     return {"ok": True}
 
 

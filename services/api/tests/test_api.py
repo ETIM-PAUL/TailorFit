@@ -1,15 +1,17 @@
 import io
+
+from tests.imgs import GOOD
 from fastapi.testclient import TestClient
 from app import pipeline
 from app.main import app
 from app.contract import validate, MEASUREMENT_NAMES
 
 client = TestClient(app)
-PHOTO = ("p.jpg", io.BytesIO(b"\xff\xd8dummy"), "image/jpeg")
+PHOTO = ("p.jpg", io.BytesIO(GOOD), "image/jpeg")
 
 
 def post(**over):
-    files = {"front": ("f.jpg", io.BytesIO(b"\xff\xd8dummy"), "image/jpeg"), "side": ("s.jpg", io.BytesIO(b"\xff\xd8dummy"), "image/jpeg")}
+    files = {"front": ("f.jpg", io.BytesIO(GOOD), "image/jpeg"), "side": ("s.jpg", io.BytesIO(GOOD), "image/jpeg")}
     data = {"height_cm": "170", "consent": "true", **over}
     return client.post("/v1/measurements", files=files, data=data)
 
@@ -60,7 +62,7 @@ def test_tilt_fields_accepted():
 
 
 def photo_files(**extra):
-    files = {"front": ("f.jpg", io.BytesIO(b"\xff\xd8dummy"), "image/jpeg"), "fabric": ("c.jpg", io.BytesIO(b"\xff\xd8dummy"), "image/jpeg")}
+    files = {"front": ("f.jpg", io.BytesIO(GOOD), "image/jpeg"), "fabric": ("c.jpg", io.BytesIO(GOOD), "image/jpeg")}
     files.update(extra)
     return files
 
@@ -73,7 +75,7 @@ def test_style_list():
 def test_preview_needs_consent_and_exactly_one_style_source():
     assert client.post("/v1/previews", files=photo_files(), data={"consent": "false", "style_id": "gown"}).status_code == 422
     assert client.post("/v1/previews", files=photo_files(), data={"consent": "true"}).status_code == 422
-    both = photo_files(inspiration=("i.jpg", io.BytesIO(b"\xff\xd8x"), "image/jpeg"))
+    both = photo_files(inspiration=("i.jpg", io.BytesIO(GOOD), "image/jpeg"))
     assert client.post("/v1/previews", files=both, data={"consent": "true", "style_id": "gown"}).status_code == 422
     assert client.post("/v1/previews", files=photo_files(), data={"consent": "true", "style_id": "toga"}).status_code == 422
 
@@ -110,14 +112,14 @@ def test_yardage_errors_are_plain_422s():
 
 
 def test_framing_endpoint_needs_the_key_in_stub_mode():
-    r = client.post("/v1/framing", files={"frame": ("f.jpg", io.BytesIO(b"\xff\xd8x"), "image/jpeg")})
+    r = client.post("/v1/framing", files={"frame": ("f.jpg", io.BytesIO(GOOD), "image/jpeg")})
     assert r.status_code == 503
 
 
 def test_framing_endpoint_validates_and_returns_status(monkeypatch):
     monkeypatch.setattr(pipeline, "enabled", lambda: True)
     monkeypatch.setattr(pipeline, "framing", lambda b: {"status": "feet_cut", "height_fraction": 0.97})
-    ok = client.post("/v1/framing", files={"frame": ("f.jpg", io.BytesIO(b"\xff\xd8x"), "image/jpeg")})
+    ok = client.post("/v1/framing", files={"frame": ("f.jpg", io.BytesIO(GOOD), "image/jpeg")})
     assert ok.status_code == 200 and ok.json() == {"status": "feet_cut", "height_fraction": 0.97}
     assert client.post("/v1/framing", files={"frame": ("f.jpg", io.BytesIO(b""), "image/jpeg")}).status_code == 422
     assert client.post("/v1/framing", files={"frame": ("f.jpg", io.BytesIO(b"x" * (3 * 1024 * 1024 + 1)), "image/jpeg")}).status_code == 413

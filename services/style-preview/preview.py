@@ -102,7 +102,7 @@ def _edit(client, prompt: str, images: list[str]) -> Image.Image:
     data = client.edit_image(prompt, images)["data"][0]
     if not data.get("b64_json"):
         raise PreviewError("The preview could not be drawn. Please try again.")
-    return Image.open(io.BytesIO(base64.b64decode(data["b64_json"]))).convert("RGB")
+    return Image.open(io.BytesIO(base64.b64decode(data["b64_json"])), formats=("JPEG", "PNG", "WEBP")).convert("RGB")
 
 
 def check_body(client, original: Image.Image, preview: Image.Image) -> tuple[bool, str]:

@@ -17,6 +17,7 @@ Masks are 2D boolean arrays (True = body), standing upright, whole body in frame
 arms slightly away from the torso in the front view.
 """
 import math
+import statistics
 from dataclasses import dataclass
 
 import numpy as np
@@ -29,6 +30,26 @@ HAND_LENGTH = 0.108  # fraction of height
 SLEEVE_PROPORTION = 0.33
 INSEAM_PROPORTION = 0.45
 ARM_TO_BUST = 0.31
+THIGH_ROW_OFFSET = 0.06  # rows (share of height) below the crotch where the thigh is measured
+ARM_ROW_OFFSET = 0.01  # rows (as a share of height) below where the arms first separate, where the arm is measured
+
+
+# Typical error (cm) per measurement on the held-out BodyM Test-B silhouettes, rounded. This is a BEST CASE (clean
+# masks, no clothing, no phone camera), so real photos will do worse. Confidence labels are capped by it: a number
+# we have measured to be 6 cm off on average cannot honestly be called "high". Measurements with no benchmark
+# counterpart are capped at medium. Update from eval/results/accuracy.md when the pilot data is in.
+TYPICAL_ERROR_CM = {"bust_chest": 10.0, "waist": 6.0, "hip": 6.5, "shoulder_width": 6.5, "arm_round": 3.0, "thigh": 6.0}
+HIGH_UNDER_CM, MEDIUM_UNDER_CM = 2.5, 6.0
+
+
+def base_confidence(name: str, method: str = "measured") -> float:
+    """Starting score for a measurement before photo-specific penalties."""
+    if method != "measured":
+        return {"estimated": 0.4, "proportional": 0.35}[method]
+    err = TYPICAL_ERROR_CM.get(name)
+    if err is None:
+        return 0.55  # not benchmarked
+    return 0.8 if err <= HIGH_UNDER_CM else 0.6 if err <= MEDIUM_UNDER_CM else 0.4
 
 
 class MeasureError(ValueError):
@@ -43,6 +64,26 @@ def _runs(row: np.ndarray) -> list[tuple[int, int]]:
 def ellipse_circumference(width_cm: float, depth_cm: float) -> float:
     a, b = width_cm / 2, depth_cm / 2
     return math.pi * (3 * (a + b) - math.sqrt((3 * a + b) * (a + 3 * b)))
+
+
+# A real torso is squarer than an ellipse: it is wide and flat across the chest, waist and hip. A superellipse
+# |x/a|^n + |y/b|^n = 1 (n = 2 is an ellipse, larger n is squarer) captures that. Exponents were chosen on the
+# BodyM Test-A silhouettes only and then judged on Test-B (see eval/README). Measurements not listed stay elliptical.
+SHAPE_EXPONENT = {"bust_chest": 2.6, "waist": 2.6, "hip": 2.6}
+
+
+def superellipse_circumference(width_cm: float, depth_cm: float, n: float) -> float:
+    if abs(n - 2.0) < 1e-9:
+        return ellipse_circumference(width_cm, depth_cm)
+    t = np.linspace(0, math.pi / 2, 400)
+    c, s = np.cos(t), np.sin(t)
+    x, y = (width_cm / 2) * c ** (2 / n), (depth_cm / 2) * s ** (2 / n)
+    return 4 * float(np.sum(np.hypot(np.diff(x), np.diff(y))))
+
+
+def circumference(width_cm: float, depth_cm: float, name: str = "") -> float:
+    """Girth from a front width and a side depth, using the cross-section shape for that measurement."""
+    return superellipse_circumference(width_cm, depth_cm, SHAPE_EXPONENT.get(name, 2.0))
 
 
 class _View:
@@ -126,8 +167,8 @@ class _Val:
     ratio: float | None = None  # front width / side depth, for circumferences
 
 
-def _circ(width_cm: float, depth_cm: float) -> "_Val":
-    return _Val(ellipse_circumference(width_cm, depth_cm), ratio=width_cm / depth_cm if depth_cm > 0 else None)
+def _circ(width_cm: float, depth_cm: float, name: str = "") -> "_Val":
+    return _Val(circumference(width_cm, depth_cm, name), ratio=width_cm / depth_cm if depth_cm > 0 else None)
 
 
 def measure_from_masks(front, side, height_cm: float, mask_quality: tuple[float, float] = (1.0, 1.0),
@@ -157,30 +198,45 @@ def measure_from_masks(front, side, height_cm: float, mask_quality: tuple[float,
             crotch_y = y
             break
         prev = n
-    thigh_y = crotch_y + int(0.03 * (F.h_px - 1)) if crotch_y is not None else F.y(0.43)
+    thigh_y = crotch_y + int(THIGH_ROW_OFFSET * (F.h_px - 1)) if crotch_y is not None else F.y(0.43 - (THIGH_ROW_OFFSET - 0.03))
 
-    # Arms: runs outside the torso at bicep height.
-    bic_y = F.y(0.72)
-    runs = _runs(F.m[bic_y])
-    cen = F.central_run(bic_y)
-    left = [r for r in runs if r[1] < cen[0]]
-    right = [r for r in runs if r[0] > cen[1]]
-    arms_apart = bool(left and right)
+    # Arms. In many photos the arms touch the torso at chest height and only open up lower down, so find the
+    # first row below the armpit where an arm is clear of the torso on both sides.
+    min_arm = max(2, int(0.012 * F.h_px))
+
+    def arms_open(y: int) -> bool:
+        cen = F.central_run(y)
+        if cen is None:
+            return False
+        runs = _runs(F.m[y])
+        return (any(r[1] < cen[0] and r[1] - r[0] + 1 >= min_arm for r in runs)
+                and any(r[0] > cen[1] and r[1] - r[0] + 1 >= min_arm for r in runs))
+
+    sep_y = next((y for y in range(F.y(0.78), F.y(0.50) + 1) if arms_open(y)), None)
+    arms_apart = sep_y is not None
+    arm_y = sep_y + int(ARM_ROW_OFFSET * F.h_px) if arms_apart else None
 
     v: dict[str, _Val] = {}
-    v["bust_chest"] = _circ(F.cwidth(_row_in(S, F, bust_y)), S.depth(bust_y))
-    v["waist"] = _circ(F.cwidth(waist_y), S.depth(_row_in(F, S, waist_y)))
-    v["hip"] = _circ(F.cwidth(hip_y), S.depth(_row_in(F, S, hip_y)))
-    v["neck"] = _circ(F.cwidth(neck_y), S.depth(_row_in(F, S, neck_y)))
+    chest_y = _row_in(S, F, bust_y)
+    chest_w = F.cwidth(chest_y)
+    if arms_apart and not arms_open(chest_y) and chest_y < arm_y:
+        chest_w = F.cwidth(arm_y)  # arms merged at the bust row: use the torso just below the armpit instead
+    v["bust_chest"] = _circ(chest_w, S.depth(bust_y), "bust_chest")
+    v["waist"] = _circ(F.cwidth(waist_y), S.depth(_row_in(F, S, waist_y)), "waist")
+    v["hip"] = _circ(F.cwidth(hip_y), S.depth(_row_in(F, S, hip_y)), "hip")
+    v["neck"] = _circ(F.cwidth(neck_y), S.depth(_row_in(F, S, neck_y)), "neck")
 
     leg_runs = _runs(F.m[thigh_y, lo:hi + 1])
-    leg_w = max(e - s + 1 for s, e in leg_runs) * F.scale
-    v["thigh"] = _circ(leg_w, S.depth(_row_in(F, S, thigh_y)))
+    # Two touching legs show up as one wide run: each leg is half of it.
+    leg_w = (leg_runs[0][1] - leg_runs[0][0] + 1) / 2 * F.scale if len(leg_runs) == 1 else max(e - s + 1 for s, e in leg_runs) * F.scale
+    v["thigh"] = _circ(leg_w, S.depth(_row_in(F, S, thigh_y)), "thigh")
     if crotch_y is None:
         v["thigh"] = _Val(v["thigh"].cm, "estimated", "legs touching, thigh width unclear")
 
     if arms_apart:
-        arm_w = (max(e - s + 1 for s, e in left) + max(e - s + 1 for s, e in right)) / 2 * F.scale
+        cen = F.central_run(arm_y)
+        outer = [(r[1] - r[0] + 1) for r in _runs(F.m[arm_y]) if r[1] < cen[0] or r[0] > cen[1]]
+        arm_w = (max(w for w in outer) if len(outer) < 2 else statistics.mean(sorted(outer)[-2:])) * F.scale
         v["arm_round"] = _Val(math.pi * arm_w)
     else:
         v["arm_round"] = _Val(ARM_TO_BUST * v["bust_chest"].cm, "estimated", "arms touching body")
@@ -207,7 +263,7 @@ def measure_from_masks(front, side, height_cm: float, mask_quality: tuple[float,
     out = []
     for name in NAMES:
         val = v[name]
-        score = {"measured": 0.75, "estimated": 0.4, "proportional": 0.35}[val.method]
+        score = base_confidence(name, val.method)
         reasons = [val.note] if val.note else []
         if not arms_apart and name in ("bust_chest", "waist", "hip", "shoulder_width"):
             score -= 0.2

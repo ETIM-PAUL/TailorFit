@@ -1,6 +1,7 @@
 import math
 import pytest
-from measure2d import measure_from_masks, ellipse_circumference, MeasureError, NAMES
+import measure2d
+from measure2d import measure_from_masks, ellipse_circumference, circumference, MeasureError, NAMES, THIGH_ROW_OFFSET
 from . import synth
 from .synth import interp, TORSO_W, DEPTH
 
@@ -17,8 +18,9 @@ def clean():
     return by_name(measure_from_masks(f, s, H))
 
 
-def circ(f, w_tab=TORSO_W):
-    return ellipse_circumference(interp(w_tab, f), interp(DEPTH, f))
+def circ(f, name, w_tab=TORSO_W):
+    """The girth the engine should report for the synthetic body's true width and depth at height f."""
+    return circumference(interp(w_tab, f), interp(DEPTH, f), name)
 
 
 def test_returns_all_twelve_in_order():
@@ -28,11 +30,11 @@ def test_returns_all_twelve_in_order():
 
 @pytest.mark.parametrize("name,frac", [("bust_chest", 0.72), ("waist", 0.62), ("hip", 0.53), ("neck", 0.875)])
 def test_circumferences_match_known_ellipses(clean, name, frac):
-    assert clean[name]["value_cm"] == pytest.approx(circ(frac), abs=2.0)
+    assert clean[name]["value_cm"] == pytest.approx(circ(frac, name), abs=2.0)
 
 
 def test_thigh_and_arm(clean):
-    thigh_f = 0.47 - 0.03
+    thigh_f = 0.47 - THIGH_ROW_OFFSET
     assert clean["thigh"]["value_cm"] == pytest.approx(ellipse_circumference(interp(synth.LEG_W, thigh_f), interp(DEPTH, thigh_f)), abs=2.0)
     assert clean["arm_round"]["value_cm"] == pytest.approx(math.pi * synth.ARM_W, abs=1.5)
 
@@ -51,10 +53,21 @@ def test_inches_consistent(clean):
         assert m["value_in"] == pytest.approx(m["value_cm"] / 2.54, abs=0.06)
 
 
-def test_clean_masks_give_high_confidence(clean):
-    # The neck is deliberately capped below high: silhouettes can't isolate it well.
-    assert all(m["confidence_label"] == "high" for n, m in clean.items() if n != "neck")
+def test_clean_masks_score_at_the_evidence_based_level_for_each_measurement(clean):
+    """Labels are capped by the error measured on the benchmark, so a clean photo does not earn 'high' everywhere."""
+    for name, m in clean.items():
+        expected = measure2d.base_confidence(name)
+        if name == "neck":
+            expected = min(expected, 0.5)
+        assert m["confidence_score"] == pytest.approx(expected, abs=0.01), name
+    assert clean["arm_round"]["confidence_label"] == "medium" and clean["bust_chest"]["confidence_label"] == "low"
     assert clean["neck"]["confidence_label"] == "medium" and "neck is hard" in clean["neck"]["reason"]
+
+
+def test_a_measurement_with_a_large_measured_error_can_never_be_high():
+    for name, err in measure2d.TYPICAL_ERROR_CM.items():
+        label = "high" if measure2d.base_confidence(name) >= 0.7 else "other"
+        assert (label == "high") == (err <= measure2d.HIGH_UNDER_CM), name
 
 
 def test_scale_follows_stated_height():
@@ -113,3 +126,35 @@ def test_front_and_side_that_disagree_lower_confidence():
     bad = by_name(measure_from_masks(f, squeezed, H))["hip"]
     assert bad["confidence_score"] < good["confidence_score"]
     assert "don't fit together" in bad["reason"] and "don't fit together" not in good["reason"]
+
+
+def test_arms_touching_at_chest_height_but_open_below_do_not_inflate_the_chest():
+    """Real silhouettes: arms hang against the torso at armpit level and open up lower down."""
+    f, s, _ = synth.make(H, merge_above=0.66)
+    r = by_name(measure_from_masks(f, s, H))
+    true_torso_bust = circ(0.72, "bust_chest")
+    assert r["bust_chest"]["value_cm"] == pytest.approx(true_torso_bust, abs=6.0)   # not +30 cm of arm
+    assert r["arm_round"]["value_cm"] == pytest.approx(math.pi * synth.ARM_W, abs=3.0)
+    assert "arms touching" not in r["arm_round"]["reason"] and r["arm_round"]["confidence_label"] != "low"
+
+
+def test_arms_glued_to_the_body_all_the_way_down_still_fall_back_with_a_reason():
+    f, s, _ = synth.make(H, arms_apart=False)
+    r = by_name(measure_from_masks(f, s, H))
+    assert "arms touching" in r["bust_chest"]["reason"] and r["arm_round"]["confidence_label"] == "low"
+
+
+def test_touching_legs_are_measured_as_two_legs_not_one():
+    f, s, _ = synth.make(H, legs_apart=False)
+    thigh_f = 0.47 - THIGH_ROW_OFFSET
+    one_leg = ellipse_circumference(interp(synth.LEG_W, thigh_f), interp(DEPTH, thigh_f))
+    t = by_name(measure_from_masks(f, s, H))["thigh"]["value_cm"]
+    assert t == pytest.approx(one_leg, abs=7.0) and t < 1.5 * one_leg   # a merged width would give about 2x
+
+
+def test_squarer_cross_sections_give_larger_girths_than_ellipses():
+    assert circumference(34, 22, "hip") > ellipse_circumference(34, 22) * 1.04
+    assert circumference(34, 22, "neck") == pytest.approx(ellipse_circumference(34, 22))   # not listed: stays elliptical
+    assert circumference(30, 30, "waist") == pytest.approx(circumference(30, 30, "waist"))
+    from measure2d import superellipse_circumference as se
+    assert se(10, 10, 2.0) == pytest.approx(math.pi * 10, rel=1e-3) and se(10, 10, 20) > 38   # n=2 circle; large n approaches a square (40)

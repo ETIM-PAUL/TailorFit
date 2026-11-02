@@ -4,19 +4,41 @@ import uuid
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import contract, dashboard_api, meta, pipeline, store, stubs, whatsapp
+from . import contract, dashboard_api, images, meta, pipeline, security, store, stubs, whatsapp
 from .env import load_env
 
 load_env()
 
 app = FastAPI(title="TailorFit API")
 app.include_router(dashboard_api.router)
+
+
+@app.middleware("http")
+async def protect(request: Request, call_next):
+    if security.cross_site(request):
+        resp = JSONResponse({"detail": "Cross-site request refused."}, status_code=403)
+    else:
+        resp = await call_next(request)
+    security.security_headers(request, resp.headers)
+    return resp
+
+
+_FIELD_NAMES = {"height_cm": "your height", "consent": "your consent", "front": "the front photo", "side": "the side photo",
+                "fabric": "the fabric photo", "frame": "the camera frame", "style_id": "the style"}
+
+
+@app.exception_handler(RequestValidationError)
+async def friendly_validation_error(request: Request, exc: RequestValidationError):
+    """Plain sentences instead of FastAPI's technical error list, so the pages can show them as they are."""
+    fields = list(dict.fromkeys(_FIELD_NAMES.get(str(e["loc"][-1]), str(e["loc"][-1])) for e in exc.errors()))
+    return JSONResponse({"detail": "Please check " + ", ".join(fields) + "."}, status_code=422)
 
 MAX_PHOTO_BYTES = 15 * 1024 * 1024
 
@@ -33,7 +55,7 @@ def health():
     return {"ok": True}
 
 
-@app.post("/v1/measurements")
+@app.post("/v1/measurements", dependencies=[Depends(security.limit("measure", 15))])
 async def create_measurements(
     front: UploadFile = File(...),
     side: UploadFile = File(...),
@@ -58,10 +80,13 @@ async def create_measurements(
     for view, upload in (("front", front), ("side", side)):
         data = await upload.read()
         if not data:
-            raise HTTPException(422, f"{upload.filename or 'photo'} is empty")
+            raise HTTPException(422, f"The {view} photo is empty.")
         if len(data) > MAX_PHOTO_BYTES:
-            raise HTTPException(413, "photo too large")
-        photos[view] = data
+            raise HTTPException(413, f"The {view} photo is too large.")
+        try:
+            photos[view] = images.normalize(data, f"{view} photo")
+        except images.ImageError as e:
+            raise HTTPException(422, str(e))
     # Validate the request against the contract. Photo URLs are placeholders until storage exists.
     request = {
         "request_id": request_id, "height_cm": height_cm, "consent": consent, "locale": locale,
@@ -101,7 +126,7 @@ async def create_measurements(
     return sheet
 
 
-@app.post("/v1/framing")
+@app.post("/v1/framing", dependencies=[Depends(security.limit("framing", 60))])
 async def framing(frame: UploadFile = File(...)):
     """Live check while the customer lines up: is the whole body in view? Nothing is stored."""
     if not pipeline.enabled():
@@ -112,7 +137,10 @@ async def framing(frame: UploadFile = File(...)):
     if len(data) > 3 * 1024 * 1024:
         raise HTTPException(413, "frame too large")
     try:
+        data = images.normalize(data, "camera frame", max_side=640)
         return await run_in_threadpool(pipeline.framing, data)
+    except images.ImageError as e:
+        raise HTTPException(422, str(e))
     except ValueError as e:
         raise HTTPException(422, str(e))
     except meta.MetaAPIError:
@@ -152,7 +180,7 @@ def list_styles():
     return [{"id": k, "name": v["name"]} for k, v in pipeline.CATALOG.items()]
 
 
-@app.post("/v1/previews")
+@app.post("/v1/previews", dependencies=[Depends(security.limit("preview", 6))])
 async def create_preview(
     front: UploadFile = File(...),
     fabric: UploadFile = File(...),
@@ -184,10 +212,13 @@ async def create_preview(
             continue
         blob = await upload.read()
         if not blob:
-            raise HTTPException(422, f"{name} photo is empty")
+            raise HTTPException(422, f"The {name} photo is empty.")
         if len(blob) > MAX_PHOTO_BYTES:
-            raise HTTPException(413, f"{name} photo too large")
-        data[name] = blob
+            raise HTTPException(413, f"The {name} photo is too large.")
+        try:
+            data[name] = images.normalize(blob, f"{name} photo")
+        except images.ImageError as e:
+            raise HTTPException(422, str(e))
     try:
         result = await run_in_threadpool(pipeline.make_preview, data["front"], data["fabric"], style_id, data.get("inspiration"))
     except (pipeline.PreviewError, ValueError) as e:
