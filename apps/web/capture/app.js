@@ -4,7 +4,7 @@
   var VIEWS = {
     front: {
       title: "Front photo",
-      tips: ["Face the camera, standing straight, feet a little apart.", "Arms slightly away from your body (about a hand's width).", "Wear fitted clothes, not loose ones.", "Prop the phone upright or ask someone to hold it level, 2 to 3 metres away. Head and feet must both be in view."],
+      tips: ["Face the camera, standing straight, feet a little apart.", "Arms slightly away from your body (about a hand's width).", "Wear fitted clothes, not loose ones.", "Prop the phone upright and level, and step back until your head and feet are both between the yellow lines. You don't need to fill the whole frame."],
       path: "M50 14 a8 9 0 1 0 .01 0 M42 30 L28 38 L18 100 M58 30 L72 38 L82 100 M42 30 L40 110 L38 190 M58 30 L60 110 L62 190 M42 110 L58 110"
     },
     side: {
@@ -97,6 +97,11 @@
     navigator.mediaDevices.getUserMedia({ video: { facingMode: state.facing, height: { ideal: 1920 } }, audio: false })
       .then(function (s) {
         state.stream = s; $("video").srcObject = s; $("fallback").hidden = true; $("video").hidden = false;
+        // Widest view the camera allows (where the browser supports zoom), so less distance is needed.
+        try {
+          var track = s.getVideoTracks()[0], cap = track.getCapabilities && track.getCapabilities();
+          if (cap && cap.zoom && cap.zoom.min < 1) track.applyConstraints({ advanced: [{ zoom: cap.zoom.min }] }).catch(function () {});
+        } catch (e) {}
         $("live-controls").hidden = false; updateShoot();
       }, function () { useFallback(); });
   }

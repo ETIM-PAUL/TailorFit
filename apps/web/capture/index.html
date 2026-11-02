@@ -53,9 +53,12 @@
       <img id="preview" alt="Photo preview" hidden>
       <div id="count" hidden aria-live="assertive"></div>
       <svg id="guide" viewBox="0 0 100 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-        <line x1="4" y1="6" x2="96" y2="6" class="gl"/><text x="50" y="4" class="gt">head</text>
-        <line x1="4" y1="194" x2="96" y2="194" class="gl"/><text x="50" y="199" class="gt">feet</text>
-        <path id="silhouette" class="gs"/>
+        <!-- Drawn at 85% size, centred: the body only needs to fill about 80% of the frame, so nobody has to stand miles away. -->
+        <g transform="translate(7.5 15) scale(0.85)">
+          <line x1="4" y1="6" x2="96" y2="6" class="gl"/><text x="50" y="3" class="gt">head</text>
+          <line x1="4" y1="194" x2="96" y2="194" class="gl"/><text x="50" y="199.5" class="gt">feet</text>
+          <path id="silhouette" class="gs"/>
+        </g>
       </svg>
     </div>
     <p id="tilt" class="tilt" aria-live="polite"></p>
