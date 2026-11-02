@@ -10,10 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _SERVICES = Path(__file__).resolve().parents[2]
-for _p in (_SERVICES / "segmentation", _SERVICES / "measurement"):
+for _p in (_SERVICES / "segmentation", _SERVICES / "measurement", _SERVICES / "quality-gate"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+import gate  # noqa: E402
 import measure2d  # noqa: E402
 import segment  # noqa: E402
 
@@ -40,19 +41,48 @@ class UserFacingError(Exception):
     """Something the customer can fix (bad photo), with a plain message."""
 
 
-def run(request_id: str, locale: str, height_cm: float, front_jpeg: bytes, side_jpeg: bytes) -> dict:
+class PhotoRejected(Exception):
+    """The quality gate refused one or both photos. `issues` is [{view, code, message}]."""
+
+    def __init__(self, issues: list[dict]):
+        super().__init__("photo rejected")
+        self.issues = issues
+
+
+def _gate(client, jpeg: bytes, view: str, locale: str, tilt: float | None) -> dict:
+    """Quality check that never blocks the customer if the checker itself is down."""
+    try:
+        return gate.check_view(client, jpeg, view, locale, tilt)
+    except meta.MetaAPIError:
+        return {"view": view, "passed": True, "borderline": True, "issues": []}
+
+
+def run(request_id: str, locale: str, height_cm: float, front_jpeg: bytes, side_jpeg: bytes,
+        front_tilt: float | None = None, side_tilt: float | None = None) -> dict:
     client = _get_client()
+    photos = {"front": (front_jpeg, front_tilt), "side": (side_jpeg, side_tilt)}
+    with ThreadPoolExecutor(4) as pool:
+        gates = {v: pool.submit(_gate, client, j, v, locale, t) for v, (j, t) in photos.items()}
+        segs = {v: pool.submit(segment.segment_view, client, j) for v, (j, _) in photos.items()}
+        verdicts = {v: f.result() for v, f in gates.items()}
+        try:
+            results = {v: f.result() for v, f in segs.items()}
+        except segment.NoPersonFound:
+            raise UserFacingError("We couldn't find a person in one of the photos. Stand in view, head to feet, and retake.")
+
+    # The mask is a more reliable check for "head or feet cut off" than the model's opinion.
+    for v, res in results.items():
+        if any("cut off" in n for n in res.notes):
+            gate.add_issue(verdicts[v], "not_full_body", locale)
+    rejected = [{"view": v, "code": i["code"], "message": i["message"]}
+                for v in ("front", "side") if not verdicts[v]["passed"] for i in verdicts[v]["issues"]]
+    if rejected:
+        raise PhotoRejected(rejected)
+
+    borderline = any(v["borderline"] for v in verdicts.values())
     try:
-        with ThreadPoolExecutor(2) as pool:
-            ff, sf = pool.submit(segment.segment_view, client, front_jpeg), pool.submit(segment.segment_view, client, side_jpeg)
-            front, side = ff.result(), sf.result()
-    except segment.NoPersonFound:
-        raise UserFacingError("We couldn't find a person in one of the photos. Stand in view, head to feet, and retake.")
-    verdicts = stubs.quality_gate(request_id, locale)
-    borderline = any(v.get("borderline") for v in verdicts)
-    try:
-        items = measure2d.measure_from_masks(front.mask, side.mask, height_cm,
-                                             (front.quality, side.quality), borderline)
+        items = measure2d.measure_from_masks(results["front"].mask, results["side"].mask, height_cm,
+                                             (results["front"].quality, results["side"].quality), borderline)
     except measure2d.MeasureError as e:
         raise UserFacingError(f"We couldn't read your body from the photos ({e}). Retake both photos, head to feet.")
     return {"request_id": request_id, "created_at": datetime.now(timezone.utc).isoformat(),

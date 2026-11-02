@@ -14,7 +14,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: pip install -r services/api/requirements.txt -r services/measurement/requirements.txt -r services/segmentation/requirements.txt
+      - run: pip install -r services/api/requirements.txt -r services/measurement/requirements.txt -r services/segmentation/requirements.txt -r services/quality-gate/requirements.txt
       - run: npm ci
         working-directory: services/segmentation
       - run: python scripts/validate-contract.py
@@ -24,5 +24,7 @@ jobs:
         working-directory: services/measurement
       - run: python -m pytest -q
         working-directory: services/segmentation
+      - run: python -m pytest -q
+        working-directory: services/quality-gate
       - run: node --test tests/logic.test.js
         working-directory: apps/web/capture

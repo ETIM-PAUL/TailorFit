@@ -78,7 +78,8 @@ class MetaClient:
         self.calls.append(Call(model, time.perf_counter() - start, attempts, False))
         raise MetaAPIError(f"{model} failed after {attempts} attempts: {last}", getattr(last, "status", None))
 
-    def _respond(self, model: str, text: str, image_url: str, metadata: dict | None = None) -> dict:
+    def _respond(self, model: str, text: str, image_url: str, metadata: dict | None = None,
+                 extra: dict | None = None) -> dict:
         body = {
             "model": model,
             "input": [{"type": "message", "role": "user", "content": [
@@ -88,11 +89,18 @@ class MetaClient:
         }
         if metadata:
             body["metadata"] = metadata
+        if extra:
+            body.update(extra)
         return self._post("/responses", model, body)
 
     def check_photo(self, prompt: str, image_url: str) -> str:
-        """Muse Spark image understanding (phase 5 quality gate)."""
-        return output_text(self._respond(SPARK, prompt, image_url))
+        """Muse Spark image understanding (phase 5 quality gate).
+
+        Minimal reasoning effort: about 3 s per photo instead of 8-25 s, and it caught every
+        fault in our test set (see services/quality-gate/README.md).
+        """
+        return output_text(self._respond(SPARK, prompt, image_url,
+                                         extra={"temperature": 0, "reasoning": {"effort": "minimal"}}))
 
     def segment(self, prompt: str, image_url: str) -> list[dict]:
         """SAM 3.1 segmentation (phase 6, also fabric isolation in phase 10). Returns boxes + raw mask tokens.

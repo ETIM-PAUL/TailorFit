@@ -58,7 +58,9 @@ async def create_measurements(
         raise HTTPException(422, getattr(e, "message", str(e)))
     if pipeline.enabled():
         try:
-            sheet = await run_in_threadpool(pipeline.run, request_id, locale, height_cm, photos["front"], photos["side"])
+            sheet = await run_in_threadpool(pipeline.run, request_id, locale, height_cm, photos["front"], photos["side"], front_tilt, side_tilt)
+        except pipeline.PhotoRejected as e:
+            raise HTTPException(422, {"error": "photo_rejected", "issues": e.issues})
         except pipeline.UserFacingError as e:
             raise HTTPException(422, str(e))
         except meta.MetaAPIError:

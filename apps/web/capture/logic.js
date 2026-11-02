@@ -32,6 +32,19 @@
     return { w: Math.round(w * s), h: Math.round(h * s) };
   }
 
-  var api = { parseHeight: parseHeight, tiltDegrees: tiltDegrees, isLevel: isLevel, fitSize: fitSize, LEVEL_DEGREES: LEVEL_DEGREES };
+  // issues: [{view, code, message}] from a photo_rejected response. Front is retaken first.
+  function rejectionViews(issues) {
+    var seen = {}, out = [];
+    (issues || []).forEach(function (i) { seen[i.view] = true; });
+    ["front", "side"].forEach(function (v) { if (seen[v]) out.push(v); });
+    return out;
+  }
+
+  function rejectionText(issues, view) {
+    return (issues || []).filter(function (i) { return i.view === view; })
+      .map(function (i) { return i.message; }).join(" ");
+  }
+
+  var api = { rejectionViews: rejectionViews, rejectionText: rejectionText, parseHeight: parseHeight, tiltDegrees: tiltDegrees, isLevel: isLevel, fitSize: fitSize, LEVEL_DEGREES: LEVEL_DEGREES };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.TF = api;
 })(typeof window !== "undefined" ? window : this);

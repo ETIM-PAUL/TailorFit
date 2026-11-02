@@ -15,7 +15,7 @@
   };
   var STEPS = ["consent", "height", "capture", "sending", "result", "error"];
   var state = { heightCm: null, photos: {}, tilt: {}, view: "front", stream: null, facing: "environment",
-                tiltNow: null, pendingBlob: null, pendingTilt: null, orientationOn: false };
+                tiltNow: null, pendingBlob: null, pendingTilt: null, orientationOn: false, retake: null, issues: [] };
 
   function show(step, label) {
     STEPS.forEach(function (s) { $("step-" + s).hidden = s !== step; });
@@ -195,8 +195,19 @@
     state.photos[state.view] = state.pendingBlob; state.tilt[state.view] = state.pendingTilt;
     $("file").value = "";
     stopCamera();
+    if (state.retake) {  // only the rejected photos are retaken
+      state.retake = state.retake.filter(function (v) { return v !== state.view; });
+      if (state.retake.length) return startRetake(state.retake[0]);
+      state.retake = null;
+      return submit();
+    }
     if (state.view === "front") startCapture("side"); else submit();
   });
+
+  function startRetake(view) {
+    startCapture(view);
+    $("cap-error").textContent = TF.rejectionText(state.issues, view);
+  }
 
   // ---- submit ----
   function submit() {
@@ -206,17 +217,25 @@
     fd.append("side", state.photos.side, "side.jpg");
     fd.append("height_cm", String(state.heightCm));
     fd.append("consent", "true");
+    fd.append("locale", $("lang").value);
     ["front", "side"].forEach(function (v) { if (state.tilt[v] !== null && state.tilt[v] !== undefined) fd.append(v + "_tilt", String(state.tilt[v])); });
     var ctl = new AbortController(), timer = setTimeout(function () { ctl.abort(); }, 90000);
     fetch("/v1/measurements", { method: "POST", body: fd, signal: ctl.signal })
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (body) {
+          if (!r.ok && body.detail && body.detail.error === "photo_rejected") {
+            var rej = new Error("photo_rejected"); rej.issues = body.detail.issues; throw rej;
+          }
           if (!r.ok) throw new Error(typeof body.detail === "string" ? body.detail : "The server could not process your photos (error " + r.status + ").");
           return body;
         });
       })
       .then(renderResult)
       .catch(function (err) {
+        if (err.issues) {  // quality gate refused a photo: show the fix and go back to that photo
+          state.issues = err.issues; state.retake = TF.rejectionViews(err.issues);
+          return startRetake(state.retake[0]);
+        }
         fail(err.name === "AbortError" ? "This took too long. Check your connection and try again." :
              err instanceof TypeError ? "No connection. Check your network and try again." : err.message);
       })
