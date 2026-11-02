@@ -10,14 +10,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _SERVICES = Path(__file__).resolve().parents[2]
-for _p in (_SERVICES / "segmentation", _SERVICES / "measurement", _SERVICES / "quality-gate", _SERVICES / "confidence"):
+for _p in (_SERVICES / "segmentation", _SERVICES / "measurement", _SERVICES / "quality-gate", _SERVICES / "confidence", _SERVICES / "style-preview"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
 import confidence  # noqa: E402
 import gate  # noqa: E402
 import measure2d  # noqa: E402
+import preview  # noqa: E402
 import segment  # noqa: E402
+from styles import CATALOG  # noqa: E402
 
 from . import meta, stubs  # noqa: E402
 
@@ -90,3 +92,10 @@ def run(request_id: str, locale: str, height_cm: float, front_jpeg: bytes, side_
     items = confidence.apply_corrections(items, confidence.load_corrections())
     return {"request_id": request_id, "created_at": datetime.now(timezone.utc).isoformat(),
             "stub": False, "measurements": items}
+
+
+def make_preview(customer_jpeg: bytes, fabric_jpeg: bytes, style_id: str | None, inspiration_jpeg: bytes | None) -> dict:
+    return preview.make_preview(_get_client(), customer_jpeg, fabric_jpeg, style_id, inspiration_jpeg)
+
+
+PreviewError = preview.PreviewError

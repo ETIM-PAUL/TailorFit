@@ -78,13 +78,14 @@ class MetaClient:
         self.calls.append(Call(model, time.perf_counter() - start, attempts, False))
         raise MetaAPIError(f"{model} failed after {attempts} attempts: {last}", getattr(last, "status", None))
 
-    def _respond(self, model: str, text: str, image_url: str, metadata: dict | None = None,
+    def _respond(self, model: str, text: str, image_url: str | list[str], metadata: dict | None = None,
                  extra: dict | None = None) -> dict:
+        urls = [image_url] if isinstance(image_url, str) else image_url
         body = {
             "model": model,
             "input": [{"type": "message", "role": "user", "content": [
                 {"type": "input_text", "text": text},
-                {"type": "input_image", "image_url": image_url},
+                *({"type": "input_image", "image_url": u} for u in urls),
             ]}],
         }
         if metadata:
@@ -100,6 +101,11 @@ class MetaClient:
         fault in our test set (see services/quality-gate/README.md).
         """
         return output_text(self._respond(SPARK, prompt, image_url,
+                                         extra={"temperature": 0, "reasoning": {"effort": "minimal"}}))
+
+    def compare_photos(self, prompt: str, image_urls: list[str]) -> str:
+        """Muse Spark over several images at once (phase 10 proportion check). Same settings as check_photo."""
+        return output_text(self._respond(SPARK, prompt, image_urls,
                                          extra={"temperature": 0, "reasoning": {"effort": "minimal"}}))
 
     def segment(self, prompt: str, image_url: str) -> list[dict]:
