@@ -83,6 +83,7 @@
   }
 
   function showLive() {
+    $("cap-error").textContent = "";
     $("preview").hidden = true; $("video").hidden = false;
     $("live-controls").hidden = false; $("review-controls").hidden = true;
     $("inframe-box").checked = false; $("use").disabled = true;
@@ -103,13 +104,14 @@
   }
 
   function stopCamera() {
+    if (counting()) { clearInterval(timer.id); timer.id = null; $("count").hidden = true; $("flip").disabled = false; }
     if (state.stream) { state.stream.getTracks().forEach(function (t) { t.stop(); }); state.stream = null; }
   }
 
   function updateShoot() {
     // Level phone required when the sensor works; without a sensor we allow the shot and note it.
     var ready = !!state.stream && $("video").videoWidth > 0 && (state.tiltNow === null || TF.isLevel(state.tiltNow));
-    $("shoot").disabled = !ready;
+    $("shoot").disabled = counting() ? false : !ready;
   }
   $("video").addEventListener("loadedmetadata", updateShoot);
 
@@ -117,12 +119,56 @@
     state.facing = state.facing === "environment" ? "user" : "environment"; openCamera();
   });
 
+  // ---- self-timer: lets the person step back and pose before the photo is taken ----
+  var timer = { id: null, left: 0, ctx: null };
+
+  function beep(freq, ms) {
+    try {
+      var ctx = timer.ctx, o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = freq; g.gain.value = 0.2; o.connect(g); g.connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime + ms / 1000);
+    } catch (e) {}
+  }
+
+  function counting() { return timer.id !== null; }
+
+  function cancelCountdown() {
+    if (timer.id !== null) { clearInterval(timer.id); timer.id = null; }
+    $("count").hidden = true; $("flip").disabled = false;
+    $("shoot").textContent = timerDelay() ? "Start timer" : "Take photo";
+    updateShoot();
+  }
+
+  function timerDelay() { return Number(document.querySelector("input[name=timer]:checked").value); }
+
+  function tick() {
+    timer.left -= 1;
+    if (timer.left <= 0) { cancelCountdown(); beep(1200, 250); if (navigator.vibrate) navigator.vibrate(200); takePhoto(); return; }
+    $("count").textContent = timer.left; beep(timer.left <= 2 ? 900 : 600, 120);
+  }
+
+  document.querySelectorAll("input[name=timer]").forEach(function (r) {
+    r.addEventListener("change", function () { if (!counting()) cancelCountdown(); });
+  });
+
   $("shoot").addEventListener("click", function () {
+    if (counting()) return cancelCountdown();
+    var delay = timerDelay();
+    if (!delay) return takePhoto();
+    try { timer.ctx = timer.ctx || new (window.AudioContext || window.webkitAudioContext)(); timer.ctx.resume(); } catch (e) { timer.ctx = null; }
+    timer.left = delay; $("count").textContent = delay; $("count").hidden = false;
+    $("flip").disabled = true; $("shoot").textContent = "Cancel"; $("shoot").disabled = false;
+    beep(600, 120);
+    timer.id = setInterval(tick, 1000);
+  });
+
+  function takePhoto() {
     var v = $("video"), size = TF.fitSize(v.videoWidth, v.videoHeight, 1600);
     var c = document.createElement("canvas"); c.width = size.w; c.height = size.h;
     c.getContext("2d").drawImage(v, 0, 0, size.w, size.h);
-    c.toBlob(function (blob) { if (blob) review(blob, state.tiltNow); }, "image/jpeg", 0.9);
-  });
+    var tilt = state.tiltNow;
+    c.toBlob(function (blob) { if (blob) review(blob, tilt); }, "image/jpeg", 0.9);
+  }
 
   $("file").addEventListener("change", function (e) {
     var f = e.target.files[0]; if (!f) return;
@@ -137,6 +183,7 @@
     img.hidden = false; $("video").hidden = true;
     $("live-controls").hidden = true; $("fallback").hidden = true; $("review-controls").hidden = false;
     $("inframe-box").checked = false; $("use").disabled = true;
+    $("cap-error").textContent = tilt !== null && !TF.isLevel(tilt) ? "The phone looked tilted when this photo was taken. Retake if the photo looks slanted." : "";
   }
   $("inframe-box").addEventListener("change", function (e) { $("use").disabled = !e.target.checked; });
 

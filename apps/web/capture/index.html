@@ -46,6 +46,7 @@
     <div id="stage">
       <video id="video" playsinline muted autoplay></video>
       <img id="preview" alt="Photo preview" hidden>
+      <div id="count" hidden aria-live="assertive"></div>
       <svg id="guide" viewBox="0 0 100 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
         <line x1="4" y1="6" x2="96" y2="6" class="gl"/><text x="50" y="4" class="gt">head</text>
         <line x1="4" y1="194" x2="96" y2="194" class="gl"/><text x="50" y="199" class="gt">feet</text>
@@ -55,7 +56,12 @@
     <p id="tilt" class="tilt" aria-live="polite"></p>
     <p class="error" id="cap-error" role="alert"></p>
     <div id="live-controls">
-      <button id="shoot" disabled>Take photo</button>
+      <div class="seg" role="radiogroup" aria-label="Timer">
+        <label><input type="radio" name="timer" value="5"> 5 s</label>
+        <label><input type="radio" name="timer" value="7" checked> 7 s</label>
+        <label><input type="radio" name="timer" value="0"> Now</label>
+      </div>
+      <button id="shoot" disabled>Start timer</button>
       <button id="flip" class="ghost">Switch camera</button>
     </div>
     <div id="fallback" hidden>
