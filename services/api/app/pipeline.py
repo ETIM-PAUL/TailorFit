@@ -10,10 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _SERVICES = Path(__file__).resolve().parents[2]
-for _p in (_SERVICES / "segmentation", _SERVICES / "measurement", _SERVICES / "quality-gate"):
+for _p in (_SERVICES / "segmentation", _SERVICES / "measurement", _SERVICES / "quality-gate", _SERVICES / "confidence"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+import confidence  # noqa: E402
 import gate  # noqa: E402
 import measure2d  # noqa: E402
 import segment  # noqa: E402
@@ -85,5 +86,7 @@ def run(request_id: str, locale: str, height_cm: float, front_jpeg: bytes, side_
                                              (results["front"].quality, results["side"].quality), borderline)
     except measure2d.MeasureError as e:
         raise UserFacingError(f"We couldn't read your body from the photos ({e}). Retake both photos, head to feet.")
+    # Offsets from the pilot calibration (services/confidence/corrections.json); empty until the pilot says otherwise.
+    items = confidence.apply_corrections(items, confidence.load_corrections())
     return {"request_id": request_id, "created_at": datetime.now(timezone.utc).isoformat(),
             "stub": False, "measurements": items}

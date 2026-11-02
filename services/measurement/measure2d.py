@@ -113,11 +113,21 @@ def _row_in(src: "_View", dst: "_View", y: int) -> int:
     return dst.y((src.bottom - y) / (src.h_px - 1))
 
 
+# Plausible front-width / side-depth ratios at each circumference. Outside the range the two
+# views probably disagree (different pose or position), so the estimate is less trustworthy.
+RATIO_RANGE = {"bust_chest": (1.1, 2.2), "waist": (1.0, 2.4), "hip": (1.0, 2.2), "neck": (0.7, 1.5), "thigh": (0.6, 1.6)}
+
+
 @dataclass
 class _Val:
     cm: float
     method: str = "measured"  # measured | proportional | estimated
     note: str = ""
+    ratio: float | None = None  # front width / side depth, for circumferences
+
+
+def _circ(width_cm: float, depth_cm: float) -> "_Val":
+    return _Val(ellipse_circumference(width_cm, depth_cm), ratio=width_cm / depth_cm if depth_cm > 0 else None)
 
 
 def measure_from_masks(front, side, height_cm: float, mask_quality: tuple[float, float] = (1.0, 1.0),
@@ -158,14 +168,14 @@ def measure_from_masks(front, side, height_cm: float, mask_quality: tuple[float,
     arms_apart = bool(left and right)
 
     v: dict[str, _Val] = {}
-    v["bust_chest"] = _Val(ellipse_circumference(F.cwidth(_row_in(S, F, bust_y)), S.depth(bust_y)))
-    v["waist"] = _Val(ellipse_circumference(F.cwidth(waist_y), S.depth(_row_in(F, S, waist_y))))
-    v["hip"] = _Val(ellipse_circumference(F.cwidth(hip_y), S.depth(_row_in(F, S, hip_y))))
-    v["neck"] = _Val(ellipse_circumference(F.cwidth(neck_y), S.depth(_row_in(F, S, neck_y))))
+    v["bust_chest"] = _circ(F.cwidth(_row_in(S, F, bust_y)), S.depth(bust_y))
+    v["waist"] = _circ(F.cwidth(waist_y), S.depth(_row_in(F, S, waist_y)))
+    v["hip"] = _circ(F.cwidth(hip_y), S.depth(_row_in(F, S, hip_y)))
+    v["neck"] = _circ(F.cwidth(neck_y), S.depth(_row_in(F, S, neck_y)))
 
     leg_runs = _runs(F.m[thigh_y, lo:hi + 1])
     leg_w = max(e - s + 1 for s, e in leg_runs) * F.scale
-    v["thigh"] = _Val(ellipse_circumference(leg_w, S.depth(_row_in(F, S, thigh_y))))
+    v["thigh"] = _circ(leg_w, S.depth(_row_in(F, S, thigh_y)))
     if crotch_y is None:
         v["thigh"] = _Val(v["thigh"].cm, "estimated", "legs touching, thigh width unclear")
 
@@ -205,6 +215,10 @@ def measure_from_masks(front, side, height_cm: float, mask_quality: tuple[float,
         if name == "neck":
             score = min(score, 0.5)
             reasons.append("neck is hard to read from a silhouette (head and jaw confuse the depth)")
+        rng = RATIO_RANGE.get(name)
+        if rng and val.ratio is not None and not rng[0] <= val.ratio <= rng[1]:
+            score *= 0.7
+            reasons.append("front width and side depth don't fit together (pose or position differs?)")
         if q < 0.8:
             reasons.append("poor mask quality")
         if borderline:

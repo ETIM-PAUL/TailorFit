@@ -101,3 +101,15 @@ def test_views_with_different_vertical_positions():
     shifted = by_name(measure_from_masks(f, np.roll(s, 40, axis=0), H))
     for name in ("bust_chest", "waist", "hip", "neck", "thigh"):
         assert shifted[name]["value_cm"] == pytest.approx(base[name]["value_cm"], abs=1.0), name
+
+
+def test_front_and_side_that_disagree_lower_confidence():
+    """Halving the side depth makes width/depth implausible, as if the views came from different poses."""
+    import numpy as np
+    f, s, _ = synth.make(H)
+    cols = np.arange(s.shape[1])[None, :]
+    squeezed = s & (cols < s.shape[1] // 2)
+    good = by_name(measure_from_masks(f, s, H))["hip"]
+    bad = by_name(measure_from_masks(f, squeezed, H))["hip"]
+    assert bad["confidence_score"] < good["confidence_score"]
+    assert "don't fit together" in bad["reason"] and "don't fit together" not in good["reason"]
