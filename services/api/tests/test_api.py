@@ -68,3 +68,29 @@ def test_preview_needs_consent_and_exactly_one_style_source():
 def test_preview_without_a_key_is_a_clear_503():
     r = client.post("/v1/previews", files=photo_files(), data={"consent": "true", "style_id": "gown"})
     assert r.status_code == 503 and "Meta Model API key" in r.json()["detail"]
+
+
+SHEET = [{"name": n, "value_cm": v} for n, v in dict(
+    bust_chest=92, waist=76, hip=98, neck=37, arm_round=29, thigh=56, shoulder_width=42,
+    sleeve_length=60, top_length=70, trouser_length=102, inseam=78, back_length=41).items()]
+
+
+def test_yardage_for_a_style():
+    r = client.post("/v1/yardage", json={"style_id": "gown", "fabric_width_in": 45, "measurements": SHEET})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["yards"] > 0 and body["display"].endswith(("yard", "yards")) and set(body["yards_by_width"]) == {"36", "45", "60"}
+
+
+def test_tailor_allowances_change_the_answer():
+    base = client.post("/v1/yardage", json={"style_id": "senator", "measurements": SHEET}).json()["yards_exact"]
+    more = client.post("/v1/yardage", json={"style_id": "senator", "measurements": SHEET, "allowances": {"shrink_pct": 10}}).json()
+    assert more["yards_exact"] > base and more["allowances"]["shrink_pct"] == 10 and more["allowances"]["seam_in"] == 0.75
+
+
+def test_yardage_errors_are_plain_422s():
+    assert client.post("/v1/yardage", json={"style_id": "toga", "measurements": SHEET}).status_code == 422
+    assert client.post("/v1/yardage", json={"style_id": "gown", "fabric_width_in": 50, "measurements": SHEET}).status_code == 422
+    r = client.post("/v1/yardage", json={"style_id": "gown", "measurements": SHEET[:2]})
+    assert r.status_code == 422 and "missing measurements" in r.json()["detail"]
+    assert client.post("/v1/yardage", json={"style_id": "gown", "measurements": SHEET, "allowances": {"shrink_pct": 99}}).status_code == 422

@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from . import contract, meta, pipeline, stubs
 from .env import load_env
@@ -113,6 +114,38 @@ async def create_preview(
     return {"request_id": f"req_{uuid.uuid4().hex[:12]}", "style_id": result["style_id"], "mode": result["mode"],
             "label": result["label"], "notes": result["notes"], "seconds": result["seconds"],
             "media_type": "image/jpeg", "image_base64": base64.b64encode(result["image_jpeg"]).decode()}
+
+
+class MeasurementIn(BaseModel):
+    name: str
+    value_cm: float
+    confidence_label: str | None = None
+
+
+class AllowancesIn(BaseModel):
+    seam_in: float | None = None
+    hem_in: float | None = None
+    shrink_pct: float | None = None
+    extra_pct: float | None = None
+    pattern_match_pct: float | None = None
+    round_to_yd: float | None = None
+
+
+class YardageRequest(BaseModel):
+    style_id: str
+    fabric_width_in: int = 45
+    measurements: list[MeasurementIn]
+    allowances: AllowancesIn | None = None  # the tailor's settings; anything left out uses the default
+
+
+@app.post("/v1/yardage")
+def yardage(req: YardageRequest):
+    """Yards of fabric a style needs, from the measurement sheet, the cloth width and the tailor's allowances."""
+    allow = pipeline.calculator.Allowances(**req.allowances.model_dump(exclude_none=True)) if req.allowances else None
+    try:
+        return pipeline.calculator.calculate(req.style_id, req.fabric_width_in, [m.model_dump() for m in req.measurements], allow)
+    except pipeline.calculator.CalcError as e:
+        raise HTTPException(422, str(e))
 
 
 # The capture page is served last so it never shadows the API routes.

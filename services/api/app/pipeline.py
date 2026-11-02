@@ -10,10 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _SERVICES = Path(__file__).resolve().parents[2]
-for _p in (_SERVICES / "segmentation", _SERVICES / "measurement", _SERVICES / "quality-gate", _SERVICES / "confidence", _SERVICES / "style-preview"):
+for _p in (_SERVICES / "segmentation", _SERVICES / "measurement", _SERVICES / "quality-gate", _SERVICES / "confidence", _SERVICES / "style-preview", _SERVICES / "fabric-calculator"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+import calculator  # noqa: E402
 import confidence  # noqa: E402
 import gate  # noqa: E402
 import measure2d  # noqa: E402
