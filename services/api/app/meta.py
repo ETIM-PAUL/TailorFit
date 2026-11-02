@@ -40,9 +40,9 @@ class Call:
 class MetaClient:
     def __init__(self, api_key: str | None = None, base_url: str = BASE_URL, max_retries: int = 3,
                  transport: httpx.BaseTransport | None = None, sleep=time.sleep):
-        key = api_key or os.environ.get("MODEL_API_KEY")
+        key = api_key or os.environ.get("MODEL_API_KEY") or os.environ.get("META_MODEL_API_KEY")
         if not key:
-            raise MetaAPIError("MODEL_API_KEY is not set")
+            raise MetaAPIError("MODEL_API_KEY is not set (META_MODEL_API_KEY also accepted)")
         self._http = httpx.Client(base_url=base_url, headers={"Authorization": f"Bearer {key}"}, transport=transport)
         self._max_retries = max_retries
         self._sleep = sleep
@@ -78,22 +78,29 @@ class MetaClient:
         self.calls.append(Call(model, time.perf_counter() - start, attempts, False))
         raise MetaAPIError(f"{model} failed after {attempts} attempts: {last}", getattr(last, "status", None))
 
-    def _respond(self, model: str, text: str, image_url: str) -> dict:
-        return self._post("/responses", model, {
+    def _respond(self, model: str, text: str, image_url: str, metadata: dict | None = None) -> dict:
+        body = {
             "model": model,
             "input": [{"type": "message", "role": "user", "content": [
                 {"type": "input_text", "text": text},
                 {"type": "input_image", "image_url": image_url},
             ]}],
-        })
+        }
+        if metadata:
+            body["metadata"] = metadata
+        return self._post("/responses", model, body)
 
     def check_photo(self, prompt: str, image_url: str) -> str:
         """Muse Spark image understanding (phase 5 quality gate)."""
         return output_text(self._respond(SPARK, prompt, image_url))
 
     def segment(self, prompt: str, image_url: str) -> list[dict]:
-        """SAM 3.1 segmentation (phase 6, also fabric isolation in phase 10). Returns boxes + raw mask tokens."""
-        return parse_segmentation(output_text(self._respond(SAM, prompt, image_url)))
+        """SAM 3.1 segmentation (phase 6, also fabric isolation in phase 10). Returns boxes + raw mask tokens.
+
+        Asks for one_bit masks (several times smaller than lossless) and a confidence per object.
+        """
+        meta_opts = {"mask_encoding": "one_bit", "include_confidence": "true"}
+        return parse_segmentation(output_text(self._respond(SAM, prompt, image_url, meta_opts)))
 
     def edit_image(self, prompt: str, image_urls: list[str]) -> dict:
         """Muse Image edit (phase 10). Raw ImagesResponse; field layout not yet confirmed."""
@@ -126,7 +133,8 @@ _BOX_KEYS = ("x1", "y1", "x2", "y2", "w", "h")
 def parse_segmentation(text: str) -> list[dict]:
     """Parse SAM special-token text (docs: sam/reading-segmentation) into records.
 
-    Each record: {frame, id, box:{x1,y1,x2,y2,w,h}, mask:{x,y,H,W,enc,payload}}.
+    Each record: {frame, id, box:{x1,y1,x2,y2,w,h[,c]}, mask:{x,y,H,W,enc,payload}}.
+    The mask is a crop of the box at source resolution, placed at (box.x1 + mask.x, box.y1 + mask.y).
     `payload` is the raw base85 string; decoding to a raster is phase 6's job.
     """
     out = []
@@ -136,7 +144,12 @@ def parse_segmentation(text: str) -> list[dict]:
             continue
         for m in _REC.finditer(line[fm.end():]):
             kv = (p.split("=", 1) for p in m.group(2).split(";") if "=" in p)
-            box = {k: int(v) for k, v in kv if k in _BOX_KEYS}
+            box = {}
+            for k, v in kv:
+                if k in _BOX_KEYS:
+                    box[k] = int(v)
+                elif k == "c":
+                    box["c"] = float(v)
             body = m.group(3)
             di = body.index(";data=")  # split here: the base85 payload may contain ';'
             head = dict(p.split("=", 1) for p in body[:di].split(";") if "=" in p)

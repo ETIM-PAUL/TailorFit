@@ -1,0 +1,9 @@
+{
+  "name": "tailorfit-segmentation",
+  "private": true,
+  "type": "module",
+  "description": "Mask decoding helper. Uses Meta's @meta-sam/parser (SAM License) as an installed dependency; its code is not copied here.",
+  "dependencies": {
+    "@meta-sam/parser": "0.1.0"
+  }
+}

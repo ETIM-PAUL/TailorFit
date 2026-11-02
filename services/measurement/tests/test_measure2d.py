@@ -52,7 +52,9 @@ def test_inches_consistent(clean):
 
 
 def test_clean_masks_give_high_confidence(clean):
-    assert all(m["confidence_label"] == "high" for m in clean.values())
+    # The neck is deliberately capped below high: silhouettes can't isolate it well.
+    assert all(m["confidence_label"] == "high" for n, m in clean.items() if n != "neck")
+    assert clean["neck"]["confidence_label"] == "medium" and "neck is hard" in clean["neck"]["reason"]
 
 
 def test_scale_follows_stated_height():
@@ -89,3 +91,13 @@ def test_bad_inputs():
         measure_from_masks(f * False, s, H)
     with pytest.raises(MeasureError):
         measure_from_masks(f, s, 50)
+
+
+def test_views_with_different_vertical_positions():
+    """Real photos never put the body on the same pixel rows in both views."""
+    import numpy as np
+    f, s, _ = synth.make(H)
+    base = by_name(measure_from_masks(f, s, H))
+    shifted = by_name(measure_from_masks(f, np.roll(s, 40, axis=0), H))
+    for name in ("bust_chest", "waist", "hip", "neck", "thigh"):
+        assert shifted[name]["value_cm"] == pytest.approx(base[name]["value_cm"], abs=1.0), name

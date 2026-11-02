@@ -2,9 +2,13 @@ import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 
-from . import contract, stubs
+from . import contract, meta, pipeline, stubs
+from .env import load_env
+
+load_env()
 
 app = FastAPI(title="TailorFit API")
 
@@ -35,12 +39,14 @@ async def create_measurements(
 ):
     """Photos + height in, measurement sheet out (stubbed until phases 5-9 land)."""
     request_id = f"req_{uuid.uuid4().hex[:12]}"
-    for upload in (front, side):
+    photos = {}
+    for view, upload in (("front", front), ("side", side)):
         data = await upload.read()
         if not data:
             raise HTTPException(422, f"{upload.filename or 'photo'} is empty")
         if len(data) > MAX_PHOTO_BYTES:
             raise HTTPException(413, "photo too large")
+        photos[view] = data
     # Validate the request against the contract. Photo URLs are placeholders until storage exists.
     request = {
         "request_id": request_id, "height_cm": height_cm, "consent": consent, "locale": locale,
@@ -50,7 +56,15 @@ async def create_measurements(
         contract.validate("CaptureRequest", request)
     except Exception as e:
         raise HTTPException(422, getattr(e, "message", str(e)))
-    sheet = stubs.build_sheet(request_id, locale, height_cm)
+    if pipeline.enabled():
+        try:
+            sheet = await run_in_threadpool(pipeline.run, request_id, locale, height_cm, photos["front"], photos["side"])
+        except pipeline.UserFacingError as e:
+            raise HTTPException(422, str(e))
+        except meta.MetaAPIError:
+            raise HTTPException(503, "The measurement service is busy. Please try again in a minute.")
+    else:
+        sheet = stubs.build_sheet(request_id, locale, height_cm)
     contract.validate("MeasurementSheet", sheet)
     return sheet
 
