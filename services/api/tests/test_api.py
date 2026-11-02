@@ -33,3 +33,14 @@ def test_bad_height_rejected():
 def test_missing_photo_rejected():
     r = client.post("/v1/measurements", data={"height_cm": "170", "consent": "true"})
     assert r.status_code == 422
+
+
+def test_capture_page_is_served():
+    r = client.get("/")
+    assert r.status_code == 200 and "TailorFit" in r.text
+    assert client.get("/app.js").status_code == 200
+    assert client.get("/health").json() == {"ok": True}
+
+
+def test_tilt_fields_accepted():
+    assert post(front_tilt="1.5", side_tilt="2.0").status_code == 200

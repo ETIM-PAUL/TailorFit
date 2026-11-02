@@ -17,3 +17,5 @@ jobs:
         working-directory: services/api
       - run: python -m pytest -q
         working-directory: services/measurement
+      - run: node --test tests/logic.test.js
+        working-directory: apps/web/capture
