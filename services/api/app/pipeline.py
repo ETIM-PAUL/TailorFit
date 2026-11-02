@@ -91,8 +91,9 @@ def run(request_id: str, locale: str, height_cm: float, front_jpeg: bytes, side_
         raise UserFacingError(f"We couldn't read your body from the photos ({e}). Retake both photos, head to feet.")
     # Offsets from the pilot calibration (services/confidence/corrections.json); empty until the pilot says otherwise.
     items = confidence.apply_corrections(items, confidence.load_corrections())
+    # "_blurred" is not part of the contract; the API pops it (only used if the customer chose to keep photos).
     return {"request_id": request_id, "created_at": datetime.now(timezone.utc).isoformat(),
-            "stub": False, "measurements": items}
+            "stub": False, "measurements": items, "_blurred": {v: r.blurred_jpeg for v, r in results.items()}}
 
 
 def make_preview(customer_jpeg: bytes, fabric_jpeg: bytes, style_id: str | None, inspiration_jpeg: bytes | None) -> dict:

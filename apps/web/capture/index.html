@@ -13,6 +13,7 @@
 
   <section id="step-consent" class="step">
     <h1>Before we start</h1>
+    <p id="greeting" class="notice" hidden></p>
     <p>TailorFit takes two photos of you and your height, and gives your tailor a measurement sheet.</p>
     <ul>
       <li>Your photos are used only to work out your measurements.</li>
@@ -20,6 +21,7 @@
       <li>Photos are deleted after processing unless you choose to keep them. You can ask for deletion at any time.</li>
       <li>Measurements are estimates. Your tailor checks them before cutting.</li>
     </ul>
+    <label class="check" id="keep-wrap" hidden><input type="checkbox" id="keep-box"> Let my tailor keep my photos (faces are blurred). If you leave this unticked, they are deleted straight after processing.</label>
     <label>Language for photo feedback
       <select id="lang"><option value="en">English</option><option value="pcm">Pidgin</option></select>
     </label>
@@ -91,6 +93,19 @@
       <thead><tr><th>Measurement</th><th>cm</th><th>in</th><th>Confidence</th></tr></thead>
       <tbody id="result-body"></tbody>
     </table>
+    <div id="order-extras" hidden>
+      <h2>See it in your fabric</h2>
+      <p id="offer-text">Add a photo of your fabric to see how your outfit could look. Your tailor will get the preview too.</p>
+      <label class="filebtn">Choose or take a photo of the fabric<input id="fabric-file" type="file" accept="image/*"></label>
+      <p id="preview-wait" class="muted" hidden>Drawing your preview. This takes about half a minute…</p>
+      <p id="preview-error" class="error" role="alert"></p>
+      <img id="preview-img" alt="Style preview" hidden style="width:100%;border-radius:10px">
+      <p id="preview-note" class="muted" hidden></p>
+      <hr>
+      <p class="muted" id="privacy-line">Your photos are not kept.</p>
+      <button id="delete-btn" class="ghost" hidden>Delete my photos now</button>
+      <p id="delete-msg" class="muted" role="status"></p>
+    </div>
     <button id="again" class="ghost">Start again</button>
   </section>
 

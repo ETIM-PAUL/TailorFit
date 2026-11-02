@@ -2,17 +2,18 @@ import base64
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import contract, meta, pipeline, stubs
+from . import contract, dashboard_api, meta, pipeline, store, stubs
 from .env import load_env
 
 load_env()
 
 app = FastAPI(title="TailorFit API")
+app.include_router(dashboard_api.router)
 
 MAX_PHOTO_BYTES = 15 * 1024 * 1024
 
@@ -38,8 +39,16 @@ async def create_measurements(
     locale: str = Form("en"),
     front_tilt: float | None = Form(None),
     side_tilt: float | None = Form(None),
+    order_token: str | None = Form(None),
+    keep_photos: bool = Form(False),
+    response: Response = None,
 ):
-    """Photos + height in, measurement sheet out (stubbed until phases 5-9 land)."""
+    """Photos + height in, measurement sheet out. With an order link, the sheet is saved to that order."""
+    order = None
+    if order_token:
+        order = store.get_by_token(order_token)
+        if not order:
+            raise HTTPException(404, "This link is not valid.")
     request_id = f"req_{uuid.uuid4().hex[:12]}"
     photos = {}
     for view, upload in (("front", front), ("side", side)):
@@ -69,7 +78,20 @@ async def create_measurements(
             raise HTTPException(503, "The measurement service is busy. Please try again in a minute.")
     else:
         sheet = stubs.build_sheet(request_id, locale, height_cm)
+    blurred = sheet.pop("_blurred", None)
     contract.validate("MeasurementSheet", sheet)
+    kept = False
+    if order:
+        # Photos are only kept if the customer opted in, and only the face-blurred versions (never in stub mode).
+        kept = bool(keep_photos and blurred)
+        store.attach_sheet(order_token, sheet, height_cm, kept)
+        store.clear_files(order["id"])  # a retake replaces whatever was kept before, including an old preview
+        store.set_preview_flag(order["id"], False)
+        if kept:
+            for view, data in blurred.items():
+                store.save_file(order["id"], f"{view}-blurred.jpg", data)
+    if response is not None:
+        response.headers["X-Photos-Kept"] = "true" if kept else "false"
     return sheet
 
 
@@ -85,8 +107,17 @@ async def create_preview(
     consent: bool = Form(...),
     style_id: str | None = Form(None),
     inspiration: UploadFile | None = File(None),
+    order_token: str | None = Form(None),
 ):
-    """Customer photo + fabric photo + a catalog style (or an inspiration photo) in, preview image out."""
+    """Customer photo + fabric photo + a catalog style (or an inspiration photo) in, preview image out.
+
+    With an order link the (face-blurred, generated) preview is also sent to that order for the tailor.
+    """
+    order = None
+    if order_token:
+        order = store.get_by_token(order_token)
+        if not order:
+            raise HTTPException(404, "This link is not valid.")
     if not consent:
         raise HTTPException(422, "consent is required")
     if bool(style_id) == bool(inspiration):
@@ -111,6 +142,9 @@ async def create_preview(
         raise HTTPException(422, str(e))
     except meta.MetaAPIError:
         raise HTTPException(503, "The preview service is busy. Please try again in a minute.")
+    if order:
+        store.save_file(order["id"], "preview.jpg", result["image_jpeg"])
+        store.set_preview_flag(order["id"], True)
     return {"request_id": f"req_{uuid.uuid4().hex[:12]}", "style_id": result["style_id"], "mode": result["mode"],
             "label": result["label"], "notes": result["notes"], "seconds": result["seconds"],
             "media_type": "image/jpeg", "image_base64": base64.b64encode(result["image_jpeg"]).decode()}
@@ -148,6 +182,10 @@ def yardage(req: YardageRequest):
         raise HTTPException(422, str(e))
 
 
+# Static pages are served last so they never shadow the API routes.
+_DASHBOARD = Path(__file__).resolve().parents[3] / "apps" / "web" / "dashboard"
+app.mount("/dashboard", StaticFiles(directory=_DASHBOARD, html=True), name="dashboard")
+# (the capture page is mounted below)
 # The capture page is served last so it never shadows the API routes.
 _CAPTURE = Path(__file__).resolve().parents[3] / "apps" / "web" / "capture"
 app.mount("/", StaticFiles(directory=_CAPTURE, html=True), name="capture")

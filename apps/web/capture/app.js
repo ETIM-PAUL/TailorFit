@@ -17,6 +17,8 @@
   var state = { heightCm: null, photos: {}, tilt: {}, view: "front", stream: null, facing: "environment",
                 tiltNow: null, pendingBlob: null, pendingTilt: null, orientationOn: false, retake: null, issues: [] };
 
+  var order = { token: new URLSearchParams(location.search).get("order"), info: null, kept: false };
+
   function show(step, label) {
     STEPS.forEach(function (s) { $("step-" + s).hidden = s !== step; });
     $("progress").textContent = label || "";
@@ -218,10 +220,12 @@
     fd.append("height_cm", String(state.heightCm));
     fd.append("consent", "true");
     fd.append("locale", $("lang").value);
+    if (order.token) { fd.append("order_token", order.token); fd.append("keep_photos", $("keep-box").checked ? "true" : "false"); }
     ["front", "side"].forEach(function (v) { if (state.tilt[v] !== null && state.tilt[v] !== undefined) fd.append(v + "_tilt", String(state.tilt[v])); });
     var ctl = new AbortController(), timer = setTimeout(function () { ctl.abort(); }, 90000);
     fetch("/v1/measurements", { method: "POST", body: fd, signal: ctl.signal })
       .then(function (r) {
+        order.kept = r.headers.get("X-Photos-Kept") === "true";
         return r.json().catch(function () { return {}; }).then(function (body) {
           if (!r.ok && body.detail && body.detail.error === "photo_rejected") {
             var rej = new Error("photo_rejected"); rej.issues = body.detail.issues; throw rej;
@@ -256,6 +260,12 @@
       tb.appendChild(tr);
     });
     $("stub-note").hidden = !sheet.stub;
+    $("order-extras").hidden = !order.token;
+    if (order.token) {
+      $("offer-text").hidden = $("fabric-file").parentNode.hidden = !(order.info && order.info.style);
+      $("privacy-line").textContent = order.kept ? "Your tailor is keeping your photos (faces blurred) because you chose to." : "Your photos were deleted after processing. Only your measurements were kept.";
+      $("delete-btn").hidden = !order.kept;
+    }
     show("result", "Done");
   }
 
@@ -266,6 +276,41 @@
   }
   $("retry").addEventListener("click", function () { state.photos.front && state.photos.side ? submit() : reset(); });
   $("again").addEventListener("click", reset);
+
+  // ---- order link from the tailor ----
+  $("fabric-file").addEventListener("change", function (e) {
+    var f = e.target.files[0]; if (!f || !state.photos.front || !order.info || !order.info.style) return;
+    $("preview-error").textContent = ""; $("preview-wait").hidden = false; $("preview-img").hidden = true; $("preview-note").hidden = true;
+    var fd = new FormData();
+    fd.append("front", state.photos.front, "front.jpg"); fd.append("fabric", f, "fabric.jpg");
+    fd.append("style_id", order.info.style.id); fd.append("consent", "true"); fd.append("order_token", order.token);
+    fetch("/v1/previews", { method: "POST", body: fd }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (b) { if (!r.ok) throw new Error(typeof b.detail === "string" ? b.detail : "The preview could not be made. Try again."); return b; });
+    }).then(function (b) {
+      $("preview-img").src = "data:" + b.media_type + ";base64," + b.image_base64; $("preview-img").hidden = false;
+      $("preview-note").hidden = false;
+      $("preview-note").textContent = b.mode === "neutral_model" ? "We could not keep your exact shape in the preview, so a neutral model is shown. " + b.label + "." : b.label + ". Sent to your tailor.";
+    }).catch(function (err) { $("preview-error").textContent = err instanceof TypeError ? "No connection. Try again." : err.message; })
+      .then(function () { $("preview-wait").hidden = true; $("fabric-file").value = ""; });
+  });
+  $("delete-btn").addEventListener("click", function () {
+    fetch("/v1/capture/" + encodeURIComponent(order.token) + "/delete-request", { method: "POST" }).then(function (r) {
+      if (!r.ok) throw new Error(); $("delete-msg").textContent = "Done. Your photos and preview have been deleted. Your tailor keeps your measurements."; $("delete-btn").hidden = true; $("privacy-line").textContent = "Your photos are not kept.";
+    }).catch(function () { $("delete-msg").textContent = "We could not delete them just now. Please try again."; });
+  });
+
+  if (order.token) {
+    fetch("/v1/capture/" + encodeURIComponent(order.token)).then(function (r) { if (!r.ok) throw new Error(); return r.json(); }).then(function (info) {
+      order.info = info;
+      var g = $("greeting"); g.hidden = false;
+      g.textContent = "Hi " + info.customer_first_name + ", your tailor asked for these photos" + (info.style ? " for your " + info.style.name + "." : ".");
+      $("keep-wrap").hidden = false;
+    }).catch(function () {
+      order.token = null;
+      fail("This link is not valid any more. Please ask your tailor for a new one.");
+      $("retry").hidden = true;
+    });
+  }
 
   show("consent", "");
 })();
