@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS orders (
   sheet_json TEXT, edits_json TEXT NOT NULL DEFAULT '{}', allowances_json TEXT NOT NULL DEFAULT '{}', notes TEXT NOT NULL DEFAULT '',
   keep_photos INTEGER NOT NULL DEFAULT 0, has_preview INTEGER NOT NULL DEFAULT 0,
   deletion_requested_at TEXT, photos_deleted_at TEXT, created_at TEXT NOT NULL, measured_at TEXT);
+CREATE TABLE IF NOT EXISTS wa_seen (id TEXT PRIMARY KEY, seen_at TEXT NOT NULL);
 """
 
 
@@ -112,6 +113,11 @@ def update_order(order_id: int, **fields) -> None:
             c.execute(f"UPDATE orders SET {', '.join(sets)} WHERE id = ?", (*vals, order_id))
 
 
+def update_phone(order_id: int, phone: str | None) -> None:
+    with _lock, _conn() as c:
+        c.execute("UPDATE customers SET phone = ? WHERE id = (SELECT customer_id FROM orders WHERE id = ?)", (phone, order_id))
+
+
 def set_preview_flag(order_id: int, has: bool) -> None:
     with _lock, _conn() as c:
         c.execute("UPDATE orders SET has_preview = ? WHERE id = ?", (int(has), order_id))
@@ -159,3 +165,10 @@ def delete_photos(order_id: int, requested_by_customer: bool = False) -> int:
                   "deletion_requested_at = CASE WHEN ? THEN ? ELSE deletion_requested_at END WHERE id = ?",
                   (now(), int(requested_by_customer), now(), order_id))
     return n
+
+
+def mark_message_seen(message_id: str) -> bool:
+    """True the first time a WhatsApp message id is seen, False for a re-delivery."""
+    with _lock, _conn() as c:
+        cur = c.execute("INSERT OR IGNORE INTO wa_seen (id, seen_at) VALUES (?, ?)", (message_id, now()))
+        return cur.rowcount == 1

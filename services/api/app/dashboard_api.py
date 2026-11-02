@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import Response as RawResponse
 from pydantic import BaseModel, Field
 
-from . import auth, cutting_sheet, pipeline, store
+from . import auth, cutting_sheet, pipeline, store, whatsapp
 
 router = APIRouter(prefix="/v1")
 tailor = Depends(auth.require_tailor)
@@ -46,6 +46,7 @@ def order_view(o: dict) -> dict:
         "photos_kept": store.order_dir(o["id"]).is_dir() and any(p.name.endswith("-blurred.jpg") for p in store.order_dir(o["id"]).iterdir()),
         "deletion_requested_at": o.get("deletion_requested_at"), "photos_deleted_at": o.get("photos_deleted_at"),
         "capture_url": f"/capture/?order={o['capture_token']}",
+        "whatsapp": {"phone_digits": whatsapp.normalize_phone(o.get("customer_phone")), "auto": whatsapp.configured()},
         "low_confidence": sum(1 for m in measurements if m["confidence_label"] == "low" and not m["edited"]),
     }
 
@@ -122,6 +123,7 @@ class Patch(BaseModel):
     fabric_width_in: int | None = None
     notes: str | None = Field(None, max_length=2000)
     allowances: dict[str, float] | None = None
+    phone: str | None = Field(None, max_length=40)
 
 
 @router.patch("/orders/{order_id}", dependencies=[tailor])
@@ -136,6 +138,8 @@ def patch_order(order_id: int, body: Patch):
         if body.fabric_width_in not in FABRIC_WIDTHS:
             raise HTTPException(422, "fabric width must be 36, 45 or 60 inches")
         fields["fabric_width_in"] = body.fabric_width_in
+    if body.phone is not None:
+        store.update_phone(order_id, body.phone.strip() or None)
     if body.notes is not None:
         fields["notes"] = body.notes
     if body.allowances is not None:
@@ -189,6 +193,21 @@ def get_cutting_sheet(order_id: int):
     pdf = cutting_sheet.build_pdf(view, store.read_file(order_id, "preview.jpg"))
     return RawResponse(pdf, media_type="application/pdf",
                        headers={"Content-Disposition": f'inline; filename="cutting-sheet-{order_id}.pdf"', "Cache-Control": "private, no-store"})
+
+
+@router.post("/orders/{order_id}/send-whatsapp", dependencies=[tailor])
+def send_whatsapp(order_id: int, request: Request):
+    """Send the customer their capture link over WhatsApp (needs the Cloud API settings)."""
+    o = _get(order_id)
+    if not whatsapp.configured():
+        raise HTTPException(503, "Automatic WhatsApp sending is not set up. Use the Open WhatsApp button instead.")
+    base = whatsapp.public_base_url() or (request.headers.get("origin") or "").rstrip("/")
+    if not base:
+        raise HTTPException(422, "Set PUBLIC_BASE_URL so the link in the message can be opened from the customer's phone.")
+    try:
+        return {"sent": whatsapp.send_invite(o, base)}
+    except whatsapp.WhatsAppError as e:
+        raise HTTPException(502, str(e))
 
 
 @router.delete("/orders/{order_id}/photos", dependencies=[tailor])

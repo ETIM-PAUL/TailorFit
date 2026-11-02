@@ -298,3 +298,11 @@ def test_preview_with_order_link_is_saved_for_the_tailor(tailor, anon, monkeypat
     bad = anon.post("/v1/previews", files={"front": ("f.jpg", io.BytesIO(JPEG), "image/jpeg"), "fabric": ("c.jpg", io.BytesIO(JPEG), "image/jpeg")},
                     data={"consent": "true", "style_id": "senator", "order_token": "bogus"})
     assert bad.status_code == 404
+
+
+def test_tailor_can_add_or_fix_the_customer_phone(tailor):
+    o = new_order(tailor, phone=None)
+    assert tailor.get(f"/v1/orders/{o['id']}").json()["whatsapp"]["phone_digits"] is None
+    d = tailor.patch(f"/v1/orders/{o['id']}", json={"phone": "0803 111 2222"}).json()
+    assert d["customer"]["phone"] == "0803 111 2222" and d["whatsapp"]["phone_digits"] == "2348031112222"
+    assert tailor.patch(f"/v1/orders/{o['id']}", json={"phone": "  "}).json()["customer"]["phone"] is None

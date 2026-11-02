@@ -110,6 +110,7 @@
     var copied = h("span", { class: "muted", id: "copied" });
     out.push(h("div", { class: "card" }, h("h2", { text: o.status === "new" ? "Send this link to " + o.customer.name.split(" ")[0] : "Customer link" }),
       h("div", { class: "linkbox" }, linkInput, h("button", { id: "copy-btn", text: "Copy", onclick: function () { linkInput.select(); (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(function () { copied.textContent = "Copied"; }, function () { copied.textContent = "Press copy on the selected text"; }); } }), copied),
+      whatsappRow(o, link),
       o.status === "new" ? h("p", { class: "muted", text: "They open it on their phone, take two photos and enter their height. This page updates when they finish." }) : null));
 
     if (o.status === "new") { out.push(h("p", { class: "muted", id: "waiting", text: "Waiting for photos…" })); timer = setInterval(function () { api("GET", "/v1/orders/" + o.id).then(function (n) { if (n.status !== "new") { stopTimer(); renderOrder(n); } }).catch(function () {}); }, 5000); }
@@ -119,6 +120,27 @@
     if (o.has_preview) out.push(h("div", { class: "card" }, h("h2", { text: "Style preview" }), h("img", { class: "preview", id: "preview-img", alt: "Style preview", src: "/v1/orders/" + o.id + "/preview.jpg?t=" + Date.now() }), h("p", { class: "muted", text: "Preview, not the final garment." })));
     out.push(notesCard(o), privacyCard(o));
     mount.apply(null, out);
+  }
+
+  // WhatsApp: "Open WhatsApp" needs nothing but the number (the tailor taps Send); "Send automatically" needs the Cloud API.
+  function whatsappRow(o, link) {
+    var wa = o.whatsapp, msg = h("span", { class: "muted", id: "wa-msg" }), row = h("div", { class: "actions", id: "wa-row" });
+    if (wa.phone_digits) {
+      var text = "Hi " + o.customer.name.split(" ")[0] + ", please take two quick photos so I can get your measurements" + (o.style ? " for your " + o.style.name : "") + ". Open this link on your phone: " + link;
+      row.appendChild(h("a", { class: "btn", id: "wa-open", target: "_blank", rel: "noopener", href: "https://wa.me/" + wa.phone_digits + "?text=" + encodeURIComponent(text), text: "Open WhatsApp with this message" }));
+      if (wa.auto) row.appendChild(h("button", { id: "wa-send", class: "ghost", text: "Send automatically", onclick: function () {
+        msg.textContent = "Sending…";
+        api("POST", "/v1/orders/" + o.id + "/send-whatsapp").then(function (r) { msg.textContent = r.sent === "template" ? "Sent as a template message." : "Sent."; }).catch(function (e) { msg.textContent = e.message; });
+      } }));
+      row.appendChild(msg);
+    }
+    var phone = h("input", { id: "phone-input", type: "tel", value: o.customer.phone || "", placeholder: "0803 000 0000", maxlength: 40, "aria-label": "Customer phone" });
+    var perr = h("span", { class: "error", id: "phone-error" });
+    return h("div", null, row,
+      wa.phone_digits ? null : h("p", { class: "muted", id: "wa-missing", text: "Add a phone number to send this on WhatsApp. Start with the country code (+234…) or with 0 for a Nigerian number." }),
+      h("div", { class: "linkbox", style: "margin-top:8px" }, phone, h("button", { id: "phone-save", class: "ghost", text: "Save number", onclick: function () {
+        api("PATCH", "/v1/orders/" + o.id, { phone: phone.value }).then(renderOrder).catch(function (e) { perr.textContent = e.message; });
+      } })), perr);
   }
 
   function measurementsCard(o) {

@@ -1,15 +1,16 @@
 import base64
+import json
 import uuid
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import contract, dashboard_api, meta, pipeline, store, stubs
+from . import contract, dashboard_api, meta, pipeline, store, stubs, whatsapp
 from .env import load_env
 
 load_env()
@@ -44,6 +45,7 @@ async def create_measurements(
     order_token: str | None = Form(None),
     keep_photos: bool = Form(False),
     response: Response = None,
+    background_tasks: BackgroundTasks = None,
 ):
     """Photos + height in, measurement sheet out. With an order link, the sheet is saved to that order."""
     order = None
@@ -92,6 +94,8 @@ async def create_measurements(
         if kept:
             for view, data in blurred.items():
                 store.save_file(order["id"], f"{view}-blurred.jpg", data)
+    if order and background_tasks is not None and whatsapp.configured():
+        background_tasks.add_task(whatsapp.notify_measured, order)  # best effort, after the response is sent
     if response is not None:
         response.headers["X-Photos-Kept"] = "true" if kept else "false"
     return sheet
@@ -113,6 +117,34 @@ async def framing(frame: UploadFile = File(...)):
         raise HTTPException(422, str(e))
     except meta.MetaAPIError:
         raise HTTPException(503, "The framing check is busy.")
+
+
+@app.get("/v1/whatsapp/webhook", include_in_schema=False)
+def whatsapp_verify(mode: str | None = Query(None, alias="hub.mode"), token: str | None = Query(None, alias="hub.verify_token"),
+                    challenge: str | None = Query(None, alias="hub.challenge")):
+    """Meta's one-time handshake when the webhook is registered: echo the challenge if the verify token matches."""
+    if not whatsapp.configured():
+        raise HTTPException(503, "WhatsApp is not set up on this server.")
+    echo = whatsapp.verify_handshake(mode, token, challenge)
+    if echo is None:
+        raise HTTPException(403, "verification failed")
+    return PlainTextResponse(echo)
+
+
+@app.post("/v1/whatsapp/webhook", include_in_schema=False)
+async def whatsapp_incoming(request: Request):
+    """Messages from customers. Every request is checked against Meta's signature before it is read."""
+    if not whatsapp.configured():
+        raise HTTPException(503, "WhatsApp is not set up on this server.")
+    raw = await request.body()
+    if not whatsapp.signature_ok(raw, request.headers.get("x-hub-signature-256")):
+        raise HTTPException(403, "bad signature")
+    try:
+        payload = json.loads(raw)
+    except ValueError:
+        return {"ok": True}  # signed but unreadable: nothing to do, and an error would only make Meta retry
+    await run_in_threadpool(whatsapp.handle_webhook, payload)
+    return {"ok": True}
 
 
 @app.get("/v1/styles")
