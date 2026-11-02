@@ -1,5 +1,6 @@
 import io
 from fastapi.testclient import TestClient
+from app import pipeline
 from app.main import app
 from app.contract import validate, MEASUREMENT_NAMES
 
@@ -106,3 +107,22 @@ def test_yardage_errors_are_plain_422s():
     r = client.post("/v1/yardage", json={"style_id": "gown", "measurements": SHEET[:2]})
     assert r.status_code == 422 and "missing measurements" in r.json()["detail"]
     assert client.post("/v1/yardage", json={"style_id": "gown", "measurements": SHEET, "allowances": {"shrink_pct": 99}}).status_code == 422
+
+
+def test_framing_endpoint_needs_the_key_in_stub_mode():
+    r = client.post("/v1/framing", files={"frame": ("f.jpg", io.BytesIO(b"\xff\xd8x"), "image/jpeg")})
+    assert r.status_code == 503
+
+
+def test_framing_endpoint_validates_and_returns_status(monkeypatch):
+    monkeypatch.setattr(pipeline, "enabled", lambda: True)
+    monkeypatch.setattr(pipeline, "framing", lambda b: {"status": "feet_cut", "height_fraction": 0.97})
+    ok = client.post("/v1/framing", files={"frame": ("f.jpg", io.BytesIO(b"\xff\xd8x"), "image/jpeg")})
+    assert ok.status_code == 200 and ok.json() == {"status": "feet_cut", "height_fraction": 0.97}
+    assert client.post("/v1/framing", files={"frame": ("f.jpg", io.BytesIO(b""), "image/jpeg")}).status_code == 422
+    assert client.post("/v1/framing", files={"frame": ("f.jpg", io.BytesIO(b"x" * (3 * 1024 * 1024 + 1)), "image/jpeg")}).status_code == 413
+
+    def bad(b):
+        raise ValueError("unreadable image")
+    monkeypatch.setattr(pipeline, "framing", bad)
+    assert client.post("/v1/framing", files={"frame": ("f.jpg", io.BytesIO(b"x"), "image/jpeg")}).status_code == 422

@@ -97,6 +97,24 @@ async def create_measurements(
     return sheet
 
 
+@app.post("/v1/framing")
+async def framing(frame: UploadFile = File(...)):
+    """Live check while the customer lines up: is the whole body in view? Nothing is stored."""
+    if not pipeline.enabled():
+        raise HTTPException(503, "Live framing needs the Meta Model API key to be configured.")
+    data = await frame.read()
+    if not data:
+        raise HTTPException(422, "empty frame")
+    if len(data) > 3 * 1024 * 1024:
+        raise HTTPException(413, "frame too large")
+    try:
+        return await run_in_threadpool(pipeline.framing, data)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    except meta.MetaAPIError:
+        raise HTTPException(503, "The framing check is busy.")
+
+
 @app.get("/v1/styles")
 def list_styles():
     return [{"id": k, "name": v["name"]} for k, v in pipeline.CATALOG.items()]

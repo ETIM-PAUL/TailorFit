@@ -112,3 +112,41 @@ def test_missing_face_is_reported_not_hidden(records):
     r = segment.segment_view(FakeClient(records[:1], []), jpeg())
     assert r.face_blurred is False
     assert "no face found to blur" in r.notes
+
+
+# ---- live framing ----
+
+def body(top, bottom, left=250, right=350, h=1000, w=600):
+    m = np.zeros((h, w), bool)
+    m[top:bottom, left:right] = True
+    return m
+
+
+@pytest.mark.parametrize("top,bottom,status", [
+    (100, 900, "ok"),            # head and feet inside the frame
+    (0, 900, "head_cut"), (100, 1000, "feet_cut"), (0, 1000, "both_cut"),
+    (330, 670, "too_small"),     # only 34% of the frame: could step closer
+])
+def test_framing_status(top, bottom, status):
+    assert segment.classify_framing(body(top, bottom))["status"] == status
+
+
+def test_framing_reports_height_and_sides_and_empty():
+    assert segment.classify_framing(body(100, 900))["height_fraction"] == 0.8
+    assert segment.classify_framing(body(100, 900, left=0, right=200))["status"] == "sides_cut"
+    assert segment.classify_framing(np.zeros((100, 60), bool)) == {"status": "no_person", "height_fraction": 0.0}
+
+
+def test_just_inside_the_edge_is_fine_and_55_percent_is_not_too_small():
+    assert segment.classify_framing(body(30, 970))["status"] == "ok"
+    assert segment.classify_framing(body(225, 775))["status"] == "ok"  # exactly 55%
+
+
+def test_framing_end_to_end_with_a_fake_client(records):
+    img = jpeg()  # framing() shrinks photos to 640px, so give it a record in that coordinate space
+    half = {**records[0], "box": {k: round(v * 0.5) if k != "c" else v for k, v in records[0]["box"].items()}}
+    r = segment.framing(FakeClient([half], []), img)
+    assert r["status"] in {"ok", "too_small", "head_cut", "feet_cut", "both_cut", "sides_cut"} and 0 < r["height_fraction"] <= 1
+    assert segment.framing(FakeClient([], []), img)["status"] == "no_person"
+    with pytest.raises(ValueError):
+        segment.framing(FakeClient([], []), b"not an image")

@@ -121,7 +121,7 @@ def mask_quality(mask: np.ndarray, confidence: float | None, n_people: int) -> t
     if cols[0] <= 1 or cols[-1] >= w - 1 - 1:
         q *= 0.8
         notes.append("body touches the side of the frame")
-    if (rows[-1] - rows[0] + 1) / h < 0.6:
+    if (rows[-1] - rows[0] + 1) / h < 0.5:
         q *= 0.7
         notes.append("person is small in the frame")
     labels, n = ndimage.label(mask)
@@ -142,6 +142,53 @@ def mask_quality(mask: np.ndarray, confidence: float | None, n_people: int) -> t
     if confidence is not None:
         q *= 0.5 + 0.5 * confidence
     return round(max(0.0, min(1.0, q)), 2), notes
+
+
+TOO_SMALL = 0.55   # body fills less than this share of the frame height: the person can step closer
+EDGE = 0.012       # within this share of the frame edge counts as touching it
+
+
+def classify_framing(mask: np.ndarray) -> dict:
+    """Is the whole body in the frame, and is the person further away than they need to be?"""
+    h, w = mask.shape
+    rows, cols = np.flatnonzero(mask.any(axis=1)), np.flatnonzero(mask.any(axis=0))
+    if rows.size == 0:
+        return {"status": "no_person", "height_fraction": 0.0}
+    edge_y, edge_x = max(1, round(EDGE * h)), max(1, round(EDGE * w))
+    head_cut, feet_cut = bool(rows[0] < edge_y), bool(rows[-1] >= h - edge_y)
+    sides_cut = bool(cols[0] < edge_x or cols[-1] >= w - edge_x)
+    frac = float((rows[-1] + 1 - rows[0]) / h)
+    if head_cut and feet_cut:
+        status = "both_cut"
+    elif head_cut:
+        status = "head_cut"
+    elif feet_cut:
+        status = "feet_cut"
+    elif sides_cut:
+        status = "sides_cut"
+    elif frac < TOO_SMALL:
+        status = "too_small"
+    else:
+        status = "ok"
+    return {"status": status, "height_fraction": round(frac, 3)}
+
+
+def framing(client, jpeg_bytes: bytes) -> dict:
+    """One small SAM call to judge how a person is framed (used live while the customer lines up)."""
+    try:
+        img = Image.open(io.BytesIO(jpeg_bytes))
+        img.load()
+    except Exception as e:
+        raise ValueError("unreadable image") from e
+    img = img.convert("RGB")
+    img.thumbnail((640, 640))
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=80)
+    url = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    masks = records_to_masks(client.segment("person", url), *img.size)
+    if not masks:
+        return {"status": "no_person", "height_fraction": 0.0}
+    return classify_framing(max((m for m, _ in masks), key=lambda m: m.sum()))
 
 
 def blur_face(img: Image.Image, face_mask: np.ndarray) -> Image.Image:

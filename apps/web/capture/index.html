@@ -18,6 +18,7 @@
     <ul>
       <li>Your photos are used only to work out your measurements.</li>
       <li>Your face is blurred automatically before anything is stored or shown.</li>
+      <li>While you line up, small preview frames are checked on our server to tell you if your whole body is in view. They are not stored.</li>
       <li>Photos are deleted after processing unless you choose to keep them. You can ask for deletion at any time.</li>
       <li>Measurements are estimates. Your tailor checks them before cutting.</li>
     </ul>
@@ -49,12 +50,13 @@
     <h1 id="cap-title"></h1>
     <ul id="cap-tips"></ul>
     <div id="stage">
+      <p id="framing" class="framing" hidden aria-live="polite"></p>
       <video id="video" playsinline muted autoplay></video>
       <img id="preview" alt="Photo preview" hidden>
       <div id="count" hidden aria-live="assertive"></div>
       <svg id="guide" viewBox="0 0 100 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-        <!-- Drawn at 85% size, centred: the body only needs to fill about 80% of the frame, so nobody has to stand miles away. -->
-        <g transform="translate(7.5 15) scale(0.85)">
+        <!-- The lines are the limits of the frame, not a target: head below the top line and feet above the bottom one is all that is needed. -->
+        <g transform="translate(1 2) scale(0.98)">
           <line x1="4" y1="6" x2="96" y2="6" class="gl"/><text x="50" y="3" class="gt">head</text>
           <line x1="4" y1="194" x2="96" y2="194" class="gl"/><text x="50" y="199.5" class="gt">feet</text>
           <path id="silhouette" class="gs"/>
@@ -62,6 +64,7 @@
       </svg>
     </div>
     <p id="tilt" class="tilt" aria-live="polite"></p>
+    <p id="lens" class="muted"></p>
     <p class="error" id="cap-error" role="alert"></p>
     <div id="live-controls">
       <label class="check" id="wide-wrap" hidden><input type="checkbox" id="wide-box" checked> Wide camera: lets you stand closer</label>
@@ -78,6 +81,7 @@
       <label class="filebtn">Choose or take a photo<input id="file" type="file" accept="image/*" capture="environment"></label>
     </div>
     <div id="review-controls" hidden>
+      <p id="review-framing" class="framing" hidden></p>
       <label class="check"><input type="checkbox" id="inframe-box"> My whole body, head to feet, is inside the frame.</label>
       <button id="use">Use this photo</button>
       <button id="retake" class="ghost">Retake</button>

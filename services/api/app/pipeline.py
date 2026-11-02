@@ -101,3 +101,7 @@ def make_preview(customer_jpeg: bytes, fabric_jpeg: bytes, style_id: str | None,
 
 
 PreviewError = preview.PreviewError
+
+
+def framing(jpeg: bytes) -> dict:
+    return segment.framing(_get_client(), jpeg)

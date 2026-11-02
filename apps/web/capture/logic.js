@@ -45,6 +45,18 @@
       .map(function (i) { return i.message; }).join(" ");
   }
 
-  var api = { rejectionViews: rejectionViews, rejectionText: rejectionText, parseHeight: parseHeight, tiltDegrees: tiltDegrees, isLevel: isLevel, fitSize: fitSize, LEVEL_DEGREES: LEVEL_DEGREES };
+  // Messages for the live "is your whole body in view?" check.
+  var FRAMING = {
+    ok: ["✓ Whole body in view. This distance is fine.", "ok"],
+    too_small: ["✓ Whole body in view. You can step closer.", "ok"],
+    head_cut: ["Your head is cut off. Step back a little.", "warn"],
+    feet_cut: ["Your feet are cut off. Step back a little.", "warn"],
+    both_cut: ["Head and feet are cut off. Step back.", "warn"],
+    sides_cut: ["Your body touches the side of the frame. Move to the middle.", "warn"],
+    no_person: ["Stand in front of the camera so we can see you.", "info"]
+  };
+  function framingMessage(status) { var m = FRAMING[status]; return m ? { text: m[0], level: m[1] } : null; }
+
+  var api = { framingMessage: framingMessage, rejectionViews: rejectionViews, rejectionText: rejectionText, parseHeight: parseHeight, tiltDegrees: tiltDegrees, isLevel: isLevel, fitSize: fitSize, LEVEL_DEGREES: LEVEL_DEGREES };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.TF = api;
 })(typeof window !== "undefined" ? window : this);

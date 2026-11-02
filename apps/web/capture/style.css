@@ -29,3 +29,6 @@ table { width: 100%; border-collapse: collapse; font-size: .95rem; } th, td { te
 [hidden] { display: none !important; }
 #count { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9rem; font-weight: 700; color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,.7); pointer-events: none; z-index: 2; }
 select { width: 100%; padding: 12px; font: inherit; border: 2px solid #bbb; border-radius: 8px; margin-top: 4px; }
+.framing { padding: 10px 12px; border-radius: 10px; font-weight: 700; margin: 8px 0; text-align: center; font-size: 1.1rem; }
+.framing.ok { background: #d7f0dd; color: #14532d; } .framing.warn { background: #fde2df; color: #9b1c12; } .framing.info { background: #eef0f2; color: #444; }
+#stage .framing { position: absolute; top: 8px; left: 8px; right: 8px; margin: 0; z-index: 3; opacity: .96; box-shadow: 0 2px 8px rgba(0,0,0,.35); }

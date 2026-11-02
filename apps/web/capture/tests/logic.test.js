@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { parseHeight, tiltDegrees, isLevel, fitSize, rejectionViews, rejectionText } = require("../logic.js");
+const { parseHeight, tiltDegrees, isLevel, fitSize, rejectionViews, rejectionText, framingMessage } = require("../logic.js");
 
 test("cm height", () => assert.deepStrictEqual(parseHeight("cm", "170"), { cm: 170 }));
 test("feet and inches", () => assert.deepStrictEqual(parseHeight("ftin", "5", "7"), { cm: 170.2 }));
@@ -36,3 +36,11 @@ test("rejected views come back front first, without duplicates", () => assert.de
 test("only the failing view is listed", () => assert.deepStrictEqual(rejectionViews([issues[0]]), ["side"]));
 test("no issues, no views", () => assert.deepStrictEqual(rejectionViews(undefined), []));
 test("messages for one view are joined", () => assert.strictEqual(rejectionText(issues, "front"), "Too dim. Something is blocking you."));
+
+test("framing: fine distances are green, cut-off bodies are warnings", () => {
+  assert.strictEqual(framingMessage("ok").level, "ok");
+  assert.ok(framingMessage("too_small").text.includes("step closer"));
+  ["head_cut", "feet_cut", "both_cut", "sides_cut"].forEach((s) => assert.strictEqual(framingMessage(s).level, "warn"));
+  assert.strictEqual(framingMessage("no_person").level, "info");
+});
+test("framing: unknown status gives no message", () => assert.strictEqual(framingMessage("???"), null));

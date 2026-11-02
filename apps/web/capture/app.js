@@ -4,7 +4,7 @@
   var VIEWS = {
     front: {
       title: "Front photo",
-      tips: ["Face the camera, standing straight, feet a little apart.", "Arms slightly away from your body (about a hand's width).", "Wear fitted clothes, not loose ones.", "Prop the phone upright and level, and step back until your head and feet are both between the yellow lines. You don't need to fill the whole frame."],
+      tips: ["Face the camera, standing straight, feet a little apart.", "Arms slightly away from your body (about a hand's width).", "Wear fitted clothes, not loose ones.", "Prop the phone upright and level. Step back only until the banner on the camera turns green (your whole body is in view). Standing further back than that makes the photo less accurate."],
       path: "M50 14 a8 9 0 1 0 .01 0 M42 30 L28 38 L18 100 M58 30 L72 38 L82 100 M42 30 L40 110 L38 190 M58 30 L60 110 L62 190 M42 110 L58 110"
     },
     side: {
@@ -109,7 +109,9 @@
           if (cap && cap.zoom && cap.zoom.min < 1) track.applyConstraints({ advanced: [{ zoom: cap.zoom.min }] }).catch(function () {});
         } catch (e) {}
         $("wide-wrap").hidden = !(wide.id && state.facing === "environment");
+        try { $("lens").textContent = "Camera in use: " + (s.getVideoTracks()[0].label || "default"); } catch (e) {}
         $("live-controls").hidden = false; updateShoot();
+        startFraming();
         if (!wide.probed) probeWide();
       }, function () {
         if (useWide) { wide.id = null; $("wide-wrap").hidden = true; return openCamera(); }  // wide camera refused: use the normal one
@@ -136,6 +138,7 @@
   }
 
   function stopCamera() {
+    stopFraming();
     if (counting()) { clearInterval(timer.id); timer.id = null; $("count").hidden = true; $("flip").disabled = false; }
     if (state.stream) { state.stream.getTracks().forEach(function (t) { t.stop(); }); state.stream = null; }
   }
@@ -207,7 +210,49 @@
     review(f, null);
   });
 
+  // ---- live framing check: tells the person when their whole body is in view, so they don't stand further than needed ----
+  var framing = { timer: null, busy: false, off: false };
+
+  function postFrame(blob) {
+    var fd = new FormData(); fd.append("frame", blob, "frame.jpg");
+    return fetch("/v1/framing", { method: "POST", body: fd }).then(function (r) {
+      if (r.status === 503) framing.off = true;  // not available on this server: stay quiet
+      if (!r.ok) throw new Error("framing " + r.status);
+      return r.json();
+    });
+  }
+  function startFraming() {
+    stopFraming();
+    if (framing.off) return;
+    framing.timer = setInterval(checkFraming, 2000); setTimeout(checkFraming, 500);
+  }
+  function stopFraming() {
+    if (framing.timer) { clearInterval(framing.timer); framing.timer = null; }
+    $("framing").hidden = true;
+  }
+  function checkFraming() {
+    var v = $("video");
+    if (framing.busy || framing.off || counting() || !state.stream || !v.videoWidth) return;
+    framing.busy = true;
+    var size = TF.fitSize(v.videoWidth, v.videoHeight, 512), c = document.createElement("canvas");
+    c.width = size.w; c.height = size.h; c.getContext("2d").drawImage(v, 0, 0, size.w, size.h);
+    c.toBlob(function (blob) {
+      if (!blob) { framing.busy = false; return; }
+      postFrame(blob).then(function (res) {
+        var m = TF.framingMessage(res.status), el = $("framing");
+        if (!m || !state.stream) return;
+        el.hidden = false; el.className = "framing " + m.level; el.textContent = m.text;
+      }).catch(function () {}).then(function () { framing.busy = false; });
+    }, "image/jpeg", 0.7);
+  }
+
   function review(blob, tilt) {
+    stopFraming();
+    var rf = $("review-framing"); rf.hidden = true;
+    if (!framing.off) postFrame(blob).then(function (res) {  // check the photo itself too, so a cut-off one is caught before sending
+      var m = TF.framingMessage(res.status); if (!m || state.pendingBlob !== blob) return;
+      rf.hidden = false; rf.className = "framing " + m.level; rf.textContent = m.level === "warn" ? "This photo: " + m.text + " Retake it." : m.text;
+    }).catch(function () {});
     state.pendingBlob = blob; state.pendingTilt = tilt;
     var img = $("preview");
     if (img.src) URL.revokeObjectURL(img.src);
