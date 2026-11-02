@@ -1,9 +1,11 @@
 import base64
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -183,9 +185,17 @@ def yardage(req: YardageRequest):
 
 
 # Static pages are served last so they never shadow the API routes.
-_DASHBOARD = Path(__file__).resolve().parents[3] / "apps" / "web" / "dashboard"
-app.mount("/dashboard", StaticFiles(directory=_DASHBOARD, html=True), name="dashboard")
-# (the capture page is mounted below)
-# The capture page is served last so it never shadows the API routes.
-_CAPTURE = Path(__file__).resolve().parents[3] / "apps" / "web" / "capture"
-app.mount("/", StaticFiles(directory=_CAPTURE, html=True), name="capture")
+_WEB = Path(__file__).resolve().parents[3] / "apps" / "web"
+
+
+@app.get("/", include_in_schema=False)
+def home(order: str | None = None):
+    """Landing page. Links made before the capture page moved to /capture/ still work."""
+    if order:
+        return RedirectResponse(f"/capture/?order={quote(order)}")
+    return FileResponse(_WEB / "landing" / "index.html")
+
+
+app.mount("/dashboard", StaticFiles(directory=_WEB / "dashboard", html=True), name="dashboard")
+app.mount("/capture", StaticFiles(directory=_WEB / "capture", html=True), name="capture")
+app.mount("/", StaticFiles(directory=_WEB / "landing", html=True), name="landing")  # landing page assets

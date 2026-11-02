@@ -1,0 +1,18 @@
+* { box-sizing: border-box; }
+body { margin: 0; font: 17px/1.5 system-ui, sans-serif; color: #1c1c1c; background: #f6f4ef; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; background: #1f3a34; color: #fff; }
+.brand { font-size: 1.15rem; letter-spacing: .02em; }
+.login { color: #fff; font-weight: 600; text-decoration: underline; }
+main { max-width: 860px; margin: 0 auto; padding: 8px 20px 24px; }
+.hero { padding: 28px 0 8px; }
+h1 { font-size: clamp(1.6rem, 5vw, 2.4rem); line-height: 1.2; margin: 0 0 .6rem; color: #1f3a34; }
+h2 { font-size: 1.2rem; margin: 1.6rem 0 .5rem; color: #1f3a34; }
+.who { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 20px; }
+.card { background: #fff; border-radius: 14px; padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.card h2 { margin-top: 0; }
+.btn { display: inline-block; padding: 12px 20px; border-radius: 10px; background: #1f3a34; color: #fff; font-weight: 700; text-decoration: none; }
+.btn.ghost { background: transparent; color: #1f3a34; border: 2px solid #1f3a34; }
+.small { font-size: .85rem; color: #666; margin: .6rem 0 0; }
+.steps { padding-left: 1.3rem; } .steps li { margin: .6rem 0; }
+.privacy { background: #fff; border-radius: 14px; padding: 4px 20px 12px; margin-top: 20px; }
+footer { text-align: center; color: #666; font-size: .9rem; padding: 18px 20px 30px; }

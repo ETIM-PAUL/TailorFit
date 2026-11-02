@@ -100,7 +100,7 @@ def test_every_tailor_endpoint_needs_login(anon, method, path):
 
 def test_create_and_list_orders(tailor):
     o = new_order(tailor)
-    assert o["status"] == "new" and o["style"]["name"] == "Senator" and o["capture_url"].startswith("/?order=")
+    assert o["status"] == "new" and o["style"]["name"] == "Senator" and o["capture_url"].startswith("/capture/?order=")
     listing = tailor.get("/v1/orders").json()
     assert [x["id"] for x in listing] == [o["id"]] and listing[0]["customer"]["name"] == "Ngozi Eze"
 

@@ -91,20 +91,45 @@
     $("inframe-box").checked = false; $("use").disabled = true;
   }
 
+  // Phones with an ultra-wide back camera (iPhone 11 and newer) can show a whole body from about half the distance.
+  var wide = { id: null, probed: false, active: false };
+
   function openCamera() {
     stopCamera();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return useFallback();
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: state.facing, height: { ideal: 1920 } }, audio: false })
+    var useWide = !!(wide.id && state.facing === "environment" && $("wide-box").checked);
+    var video = useWide ? { deviceId: { exact: wide.id }, height: { ideal: 1920 } } : { facingMode: state.facing, height: { ideal: 1920 } };
+    navigator.mediaDevices.getUserMedia({ video: video, audio: false })
       .then(function (s) {
+        wide.active = useWide;
         state.stream = s; $("video").srcObject = s; $("fallback").hidden = true; $("video").hidden = false;
         // Widest view the camera allows (where the browser supports zoom), so less distance is needed.
         try {
           var track = s.getVideoTracks()[0], cap = track.getCapabilities && track.getCapabilities();
           if (cap && cap.zoom && cap.zoom.min < 1) track.applyConstraints({ advanced: [{ zoom: cap.zoom.min }] }).catch(function () {});
         } catch (e) {}
+        $("wide-wrap").hidden = !(wide.id && state.facing === "environment");
         $("live-controls").hidden = false; updateShoot();
-      }, function () { useFallback(); });
+        if (!wide.probed) probeWide();
+      }, function () {
+        if (useWide) { wide.id = null; $("wide-wrap").hidden = true; return openCamera(); }  // wide camera refused: use the normal one
+        useFallback();
+      });
   }
+
+  // Camera names are only visible after permission is granted, so look for the wide one after the first stream opens.
+  function probeWide() {
+    wide.probed = true;
+    if (!navigator.mediaDevices.enumerateDevices) return;
+    navigator.mediaDevices.enumerateDevices().then(function (list) {
+      var cams = list.filter(function (d) { return d.kind === "videoinput" && /ultra/i.test(d.label) && !/front|user/i.test(d.label); });
+      wide.id = cams.length ? cams[0].deviceId : null;
+      if (!wide.id) return;
+      $("wide-wrap").hidden = state.facing !== "environment";
+      if ($("wide-box").checked && !wide.active && state.facing === "environment" && !counting() && !state.pendingBlob) openCamera();
+    }).catch(function () {});
+  }
+  $("wide-box").addEventListener("change", function () { if (!counting()) openCamera(); });
 
   function useFallback() {
     $("video").hidden = true; $("live-controls").hidden = true; $("fallback").hidden = false;

@@ -8,6 +8,14 @@ Put a username and password in `.env` (`TAILOR_USERNAME`, `TAILOR_PASSWORD`). Th
 these empty the dashboard stays off. Orders go in `data/tailorfit.db` and kept photos in `data/photos/`
 (override with `TAILORFIT_DB` / `TAILORFIT_PHOTOS`). `data/` is git-ignored.
 
+## Logging in
+
+1. Open the site's home page and click **Tailor login** (or go straight to `/dashboard/`).
+2. Enter the `TAILOR_USERNAME` and `TAILOR_PASSWORD` you set. To keep them permanently, add them to `.env`
+   and restart the server. For one run only, put them in front of the command:
+   `TAILOR_USERNAME=ada TAILOR_PASSWORD='...' .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000`
+3. Wrong password five times in five minutes locks that address out for a few minutes.
+
 ## The tailor's flow
 
 1. **New customer**: name, phone, style, fabric width. You get a private link to send them.

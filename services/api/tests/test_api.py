@@ -35,11 +35,23 @@ def test_missing_photo_rejected():
     assert r.status_code == 422
 
 
-def test_capture_page_is_served():
+def test_landing_page_links_to_dashboard_and_demo():
     r = client.get("/")
     assert r.status_code == 200 and "TailorFit" in r.text
-    assert client.get("/app.js").status_code == 200
+    assert 'href="/dashboard/"' in r.text and 'href="/capture/"' in r.text
+    assert client.get("/style.css").status_code == 200
     assert client.get("/health").json() == {"ok": True}
+
+
+def test_capture_page_is_served_under_capture():
+    r = client.get("/capture/")
+    assert r.status_code == 200 and "TailorFit" in r.text and "consent-btn" in r.text
+    assert client.get("/capture/app.js").status_code == 200 and client.get("/capture/logic.js").status_code == 200
+
+
+def test_old_style_customer_links_redirect_to_the_capture_page():
+    r = client.get("/?order=abc-123_X", follow_redirects=False)
+    assert r.status_code == 307 and r.headers["location"] == "/capture/?order=abc-123_X"
 
 
 def test_tilt_fields_accepted():

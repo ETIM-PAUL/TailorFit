@@ -45,7 +45,7 @@ def order_view(o: dict) -> dict:
         "notes": o.get("notes") or "", "has_preview": bool(o["has_preview"]),
         "photos_kept": store.order_dir(o["id"]).is_dir() and any(p.name.endswith("-blurred.jpg") for p in store.order_dir(o["id"]).iterdir()),
         "deletion_requested_at": o.get("deletion_requested_at"), "photos_deleted_at": o.get("photos_deleted_at"),
-        "capture_url": f"/?order={o['capture_token']}",
+        "capture_url": f"/capture/?order={o['capture_token']}",
         "low_confidence": sum(1 for m in measurements if m["confidence_label"] == "low" and not m["edited"]),
     }
 
