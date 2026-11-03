@@ -3,13 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#1f3a34">
+  <meta name="theme-color" content="#22306b">
   <title>TailorFit</title>
-  <link rel="icon" href="data:,">
+  <link rel="icon" href="/shared/icon.svg" type="image/svg+xml">
+  <link rel="preload" href="/shared/fonts/atkinson-hyperlegible-next.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/shared/base.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header><strong>TailorFit</strong><span id="progress"></span></header>
+<header class="top"><strong class="brand">TailorFit</strong><span id="progress"></span></header>
+<div class="tape progress-tape" aria-hidden="true"><span class="marker"></span></div>
 <main>
 
   <section id="step-consent" class="step">
@@ -92,7 +95,7 @@
   <section id="step-sending" class="step" hidden>
     <h1>Working out your measurements…</h1>
     <p>This can take up to a minute. Keep this page open.</p>
-    <div class="spinner" aria-hidden="true"></div>
+    <div class="tape working-tape" aria-hidden="true"></div>
   </section>
 
   <section id="step-result" class="step" hidden>
@@ -108,7 +111,7 @@
       <label class="filebtn">Choose or take a photo of the fabric<input id="fabric-file" type="file" accept="image/*"></label>
       <p id="preview-wait" class="muted" hidden>Drawing your preview. This takes about half a minute…</p>
       <p id="preview-error" class="error" role="alert"></p>
-      <img id="preview-img" alt="Style preview" hidden style="width:100%;border-radius:10px">
+      <img id="preview-img" class="style-preview" alt="Style preview" hidden>
       <p id="preview-note" class="muted" hidden></p>
       <hr>
       <p class="muted" id="privacy-line">Your photos are not kept.</p>

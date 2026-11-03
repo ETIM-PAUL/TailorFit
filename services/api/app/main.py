@@ -280,6 +280,7 @@ def home(order: str | None = None):
     return FileResponse(_WEB / "landing" / "index.html")
 
 
+app.mount("/shared", StaticFiles(directory=_WEB / "shared"), name="shared")  # font and base styles used by every page
 app.mount("/dashboard", StaticFiles(directory=_WEB / "dashboard", html=True), name="dashboard")
 app.mount("/capture", StaticFiles(directory=_WEB / "capture", html=True), name="capture")
 app.mount("/", StaticFiles(directory=_WEB / "landing", html=True), name="landing")  # landing page assets

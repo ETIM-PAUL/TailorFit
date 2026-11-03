@@ -1,0 +1,81 @@
+/* TailorFit base: tokens, type, the tape, and form controls. Each app's style.css adds its own layout. */
+
+@font-face {
+  font-family: "Atkinson Next";
+  src: url("/shared/fonts/atkinson-hyperlegible-next.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+:root {
+  --indigo: #22306b;       /* adire indigo: ink for brand, buttons, headings */
+  --indigo-deep: #18224f;
+  --indigo-wash: #e8ebf6;
+  --tape: #f5c518;         /* the tailor's tape: the one bright thing */
+  --paper: #f3f4f8;        /* pattern paper */
+  --surface: #ffffff;
+  --ink: #1b1f2e;
+  --muted: #596079;
+  --line: #dde0ea;
+  --high: #1e7a4c;  --high-wash: #e3f3ea;
+  --medium: #9a5b00; --medium-wash: #fdf0d8;
+  --low: #c2341f;   --low-wash: #fbe5e1;
+  --radius-panel: 12px; --radius-control: 8px;
+  --font: "Atkinson Next", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; font: 400 17px/1.5 var(--font); color: var(--ink); background: var(--paper); }
+h1, h2, h3 { color: var(--indigo); line-height: 1.15; margin: 0 0 .5em; }
+h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -.02em; }
+h2 { font-size: 1.2rem; font-weight: 700; letter-spacing: -.01em; }
+h3 { font-size: 1rem; font-weight: 700; }
+p { margin: 0 0 .8em; }
+a { color: var(--indigo); text-underline-offset: .18em; }
+table, .num { font-variant-numeric: tabular-nums; }
+[hidden] { display: none !important; }
+
+/* ---- the tape: cm ticks, half-cm ticks and mm ticks on tape yellow ---- */
+.tape {
+  --cm: 12px;
+  background:
+    linear-gradient(90deg, var(--ink) 1.5px, transparent 1.5px) 0 0 / var(--cm) 46% repeat-x,
+    linear-gradient(90deg, var(--ink) 1px, transparent 1px) calc(var(--cm) / 2) 0 / var(--cm) 30% repeat-x,
+    linear-gradient(90deg, rgba(27, 31, 46, .5) 1px, transparent 1px) 0 0 / calc(var(--cm) / 10) 16% repeat-x,
+    var(--tape);
+}
+.tape-edge { height: 7px; --cm: 10px; }
+
+/* ---- controls ---- */
+button, .btn {
+  font: inherit; font-weight: 700; padding: 11px 18px; border-radius: var(--radius-control); border: 2px solid var(--indigo);
+  background: var(--indigo); color: #fff; cursor: pointer; text-decoration: none; display: inline-block; line-height: 1.2;
+}
+button:hover, .btn:hover { background: var(--indigo-deep); border-color: var(--indigo-deep); }
+button.ghost, .btn.ghost { background: transparent; color: var(--indigo); }
+button.ghost:hover, .btn.ghost:hover { background: var(--indigo-wash); }
+button.danger { background: transparent; border-color: var(--low); color: var(--low); }
+button.danger:hover { background: var(--low-wash); border-color: var(--low); }
+button:disabled { opacity: .4; cursor: default; }
+button:disabled:hover { background: var(--indigo); }
+input, select, textarea {
+  font: inherit; padding: 10px 12px; border: 1.5px solid #b9bed0; border-radius: var(--radius-control); width: 100%; background: var(--surface); color: var(--ink);
+}
+input:hover, select:hover, textarea:hover { border-color: var(--muted); }
+:focus-visible { outline: 3px solid var(--tape); outline-offset: 2px; box-shadow: 0 0 0 5px var(--indigo); }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offset: 0; }
+input[type=checkbox], input[type=radio] { width: 20px; height: 20px; accent-color: var(--indigo); }
+label { display: block; font-weight: 700; }
+
+/* ---- confidence ---- */
+.conf-high, .conf.high { color: var(--high); font-weight: 700; }
+.conf-medium, .conf.medium { color: var(--medium); font-weight: 700; }
+.conf-low, .conf.low { color: var(--low); font-weight: 700; }
+
+.error { color: var(--low); min-height: 1.3em; }
+.muted { color: var(--muted); font-size: .92rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

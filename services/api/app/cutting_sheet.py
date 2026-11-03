@@ -12,7 +12,7 @@ PRETTY = {
     "shoulder_width": "Shoulder width", "sleeve_length": "Sleeve length", "top_length": "Top length",
     "trouser_length": "Trouser length", "inseam": "Inseam", "back_length": "Back length",
 }
-GREEN = colors.HexColor("#1f3a34")
+BRAND = colors.HexColor("#22306b")  # adire indigo, same as the app
 
 
 def pretty(name: str) -> str:
@@ -30,8 +30,8 @@ def _p(text: str, style) -> Paragraph:
 
 def build_pdf(view: dict, preview_jpeg: bytes | None = None) -> bytes:
     ss = getSampleStyleSheet()
-    h1 = ParagraphStyle("h1", parent=ss["Title"], textColor=GREEN, fontSize=20, alignment=0, spaceAfter=4)
-    h2 = ParagraphStyle("h2", parent=ss["Heading2"], textColor=GREEN, fontSize=13, spaceBefore=10, spaceAfter=4)
+    h1 = ParagraphStyle("h1", parent=ss["Title"], textColor=BRAND, fontSize=20, alignment=0, spaceAfter=4)
+    h2 = ParagraphStyle("h2", parent=ss["Heading2"], textColor=BRAND, fontSize=13, spaceBefore=10, spaceAfter=4)
     body = ParagraphStyle("body", parent=ss["BodyText"], fontSize=9.5, leading=12)
     small = ParagraphStyle("small", parent=body, fontSize=8, leading=10, textColor=colors.HexColor("#555555"))
 
@@ -59,7 +59,7 @@ def build_pdf(view: dict, preview_jpeg: bytes | None = None) -> bytes:
         rows.append([_p(pretty(m["name"]), body), f"{m['value_cm']:.1f}", f"{m['value_in']:.1f}",
                      _p(m["confidence_label"] + (" (edited)" if m["edited"] else ""), body), _p(note, small)])
     mt = Table(rows, colWidths=[34 * mm, 17 * mm, 15 * mm, 26 * mm, 84 * mm], repeatRows=1)
-    ts = [("BACKGROUND", (0, 0), (-1, 0), GREEN), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white), ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+    ts = [("BACKGROUND", (0, 0), (-1, 0), BRAND), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white), ("FONTSIZE", (0, 0), (-1, -1), 9.5),
           ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#bbbbbb")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
           ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f6f4ef")])]
     for i, m in enumerate(view["measurements"], start=1):
@@ -80,7 +80,7 @@ def build_pdf(view: dict, preview_jpeg: bytes | None = None) -> bytes:
         for r in fin:
             rows.append([_p(r["part"], body), f"{r['inches']:.1f}", f"{r['cm']:.1f}", _p(r["how"], small), _p(r["confidence_label"], body)])
         ft = Table(rows, colWidths=[34 * mm, 15 * mm, 17 * mm, 84 * mm, 26 * mm], repeatRows=1)
-        fts = [("BACKGROUND", (0, 0), (-1, 0), GREEN), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white), ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+        fts = [("BACKGROUND", (0, 0), (-1, 0), BRAND), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white), ("FONTSIZE", (0, 0), (-1, -1), 9.5),
                ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#bbbbbb")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f6f4ef")])]
         fts += [("BACKGROUND", (4, i), (4, i), colors.HexColor("#f9d6d2")) for i, r in enumerate(fin, start=1) if r["confidence_label"] == "low"]

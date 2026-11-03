@@ -103,10 +103,10 @@
   function renderOrder(o) {
     var out = [];
     out.push(h("div", { class: "row", style: "align-items:center" },
-      h("div", null, h("h1", { text: o.customer.name }), h("div", { class: "muted", text: (o.customer.phone || "No phone") + " · " + (o.measured_at ? "measured " + fmtDate(o.measured_at) : "created " + fmtDate(o.created_at)) })),
+      h("div", null, h("h1", { text: o.customer.name }), h("div", { class: "meta" }, h("span", { text: o.customer.phone || "No phone" }), h("span", { text: (o.measured_at ? "Measured " + fmtDate(o.measured_at) : "Created " + fmtDate(o.created_at)) }))),
       h("div", { style: "text-align:right" }, o.can_repeat ? h("button", { id: "repeat-btn", text: "New order for " + o.customer.name.split(" ")[0], onclick: function () {
         api("POST", "/v1/orders/" + o.id + "/repeat", {}).then(renderOrder).catch(function (e) { alert(e.message); });
-      } }) : null, " ", h("button", { class: "ghost", text: "← All orders", onclick: showList }))));
+      } }) : null, " ", h("button", { class: "ghost", text: "All orders", onclick: showList }))));
     if (o.carried_from) out.push(h("div", { class: "tapefirst", id: "carried-note" }, h("strong", { text: "Repeat order: numbers from " + fmtDate(o.carried_from.measured_at) + "." }),
       h("div", { class: "muted", text: "Nothing was re-measured. If " + o.customer.name.split(" ")[0] + "'s body may have changed, send the link below and ask for new photos; this page will then show what changed." })));
 
@@ -114,7 +114,7 @@
     var linkInput = h("input", { id: "caplink", readonly: true, value: link });
     var copied = h("span", { class: "muted", id: "copied" });
     out.push(h("div", { class: "card" }, h("h2", { text: o.status === "new" ? "Send this link to " + o.customer.name.split(" ")[0] : o.carried_from ? "Ask for new photos (optional)" : "Customer link" }),
-      h("div", { class: "linkbox" }, linkInput, h("button", { id: "copy-btn", text: "Copy", onclick: function () { linkInput.select(); (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(function () { copied.textContent = "Copied"; }, function () { copied.textContent = "Press copy on the selected text"; }); } }), copied),
+      h("div", { class: "linkbox" }, linkInput, h("button", { id: "copy-btn", class: "ghost", text: "Copy", onclick: function () { linkInput.select(); (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(function () { copied.textContent = "Copied"; }, function () { copied.textContent = "Press copy on the selected text"; }); } }), copied),
       whatsappRow(o, link),
       o.status === "new" ? h("p", { class: "muted", text: "They open it on their phone, take two photos and enter their height. This page updates when they finish." }) : null));
 
@@ -161,7 +161,7 @@
       });
       var cells = [h("td", null, h("strong", { text: pretty(m.name) })), h("td", { class: "muted hide-sm", text: m.edited ? m.original_cm.toFixed(1) : "" }),
         h("td", { class: m.edited ? "edited" : "" }, input), h("td", { class: "hide-sm", text: m.value_in.toFixed(1) }),
-        h("td", null, h("span", { class: "conf-" + m.confidence_label, text: m.confidence_label }), h("div", { class: "why", text: m.reason })),
+        h("td", null, h("span", { class: "conf-" + m.confidence_label, text: m.confidence_label }), m.reason !== "measured from clear masks" ? h("div", { class: "why", text: m.reason }) : null),
         h("td", null, m.edited ? h("button", { class: "ghost", style: "padding:4px 8px;font-size:.8rem", text: "Undo edit", onclick: function () { var e = {}; e[m.name] = null; saveEdits(o.id, e); } }) : null)];
       if (!m.edited && !o.carried_from) cells[5] = h("td", null, h("button", { class: "ghost", style: "padding:4px 8px;font-size:.8rem", "data-agree": m.name, text: "Tape agrees", onclick: function () { var e = {}; e[m.name] = m.original_cm; saveEdits(o.id, e); } }));
       body.appendChild(h("tr", { "data-row": m.name, class: tapeNow.indexOf(m.name) >= 0 ? "tape-now" : "" }, cells));
@@ -205,14 +205,14 @@
     var err = h("p", { class: "error", id: "style-error", role: "alert" });
     var y = o.yardage, result = null;
     if (y && y.error) result = h("p", { class: "error", text: y.error });
-    else if (y) result = h("div", null, h("div", { class: "big", id: "yardage", text: y.display }), h("div", { class: "muted", text: "of " + y.fabric_width_in + "-inch fabric · all widths: " + Object.keys(y.yards_by_width).map(function (w) { return w + "\": " + y.yards_by_width[w] + " yd"; }).join(", ") }),
+    else if (y) result = h("div", null, h("div", { class: "big", id: "yardage", text: y.display }), h("div", { class: "muted", text: "of " + y.fabric_width_in + "-inch fabric" }), h("div", { class: "muted", text: "All widths: " + Object.keys(y.yards_by_width).map(function (w) { return w + "\": " + y.yards_by_width[w] + " yd"; }).join(", ") }),
       y.notes.length ? h("ul", null, y.notes.map(function (n) { return h("li", { class: "muted", text: n }); })) : null, h("p", { class: "muted", text: y.basis }));
     else result = h("p", { class: "muted", text: "Choose a style to see the yardage." });
     return h("div", { class: "card" }, h("h2", { text: "Style and fabric" }),
       h("div", { class: "row" }, h("div", null, h("label", { for: "style", text: "Style" }), st), h("div", null, h("label", { for: "fwidth", text: "Fabric width" }), width)),
       easeRow ? h("div", null, h("h3", { text: "Ease: how loose the garment is" }), easeRow) : null,
       h("details", null, h("summary", { text: "Fabric allowances (you can change these)" }), allowRow),
-      h("div", { class: "actions" }, h("button", { id: "update-style", text: "Update", onclick: function () {
+      h("div", { class: "actions" }, h("button", { id: "update-style", class: "ghost", text: "Update", onclick: function () {
         var al = {}; fields.forEach(function (f) { al[f[0]] = Number(inputs[f[0]].value); });
         // Only pin an ease value when it differs from the style's default, so a later style change picks up the new default.
         Object.keys(easeInputs).forEach(function (part) { var v = Number(easeInputs[part].value); al[part + "_ease_in"] = v === o.ease.defaults[part] ? null : v; });
@@ -258,7 +258,7 @@
           h("td", { text: m.mae_cm + " cm" }), h("td", { text: (m.bias_cm > 0 ? "+" : "") + m.bias_cm + " cm" }), h("td", { class: m.recent_mae_cm !== null && m.recent_mae_cm < m.first_mae_cm ? "good" : "", text: trend }),
           h("td", { text: m.offset_cm ? (m.offset_cm > 0 ? "+" : "") + m.offset_cm + " cm applied" : "not yet" }), h("td", null, spark));
       });
-      mount(h("div", { class: "row", style: "align-items:center" }, h("h1", { text: "Accuracy" }), h("div", { style: "text-align:right" }, h("button", { class: "ghost", text: "← All orders", onclick: showList }))),
+      mount(h("div", { class: "row", style: "align-items:center" }, h("h1", { text: "Accuracy" }), h("div", { style: "text-align:right" }, h("button", { class: "ghost", text: "All orders", onclick: showList }))),
         h("div", { class: "card" }, h("p", { class: "muted", id: "acc-intro", text: a.orders ? "Based on " + a.orders + " order" + (a.orders === 1 ? "" : "s") + " where you entered a tape value. Gap = how far our estimate was from your tape. Bias is positive when we read too big."
             : "No tape values yet. Open a measured order, type what your tape says (or press \"Tape agrees\"), and this page fills in." }),
           a.measurements.length ? h("table", null, h("thead", null, h("tr", null, ["Measurement", "Checked", "Average gap", "Bias", "First → latest orders", "Learned offset", "Gap per order"].map(function (t) { return h("th", { text: t }); }))), h("tbody", null, rows)) : null,

@@ -248,3 +248,16 @@ def test_nothing_is_written_to_disk_without_opt_in(tmp_path, monkeypatch):
     r = post_photos(GOOD, order_token=o["capture_token"], keep_photos="false")
     assert r.status_code == 200 and r.headers["x-photos-kept"] == "false"
     assert not (tmp_path / "photos").exists() or not any((tmp_path / "photos").rglob("*"))
+
+
+def test_pages_revalidate_so_updates_show_up_and_the_font_is_cached():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    c = TestClient(app)
+    for path in ("/", "/dashboard/", "/capture/", "/shared/base.css", "/dashboard/app.js"):
+        r = c.get(path)
+        assert r.status_code == 200 and r.headers["cache-control"] == "no-cache", path
+    font = c.get("/shared/fonts/atkinson-hyperlegible-next.woff2")
+    assert font.status_code == 200 and "max-age" in font.headers["cache-control"]
+    assert c.get("/health").headers["cache-control"] == "no-cache"
+    assert c.get("/v1/styles").headers["cache-control"] == "no-store"

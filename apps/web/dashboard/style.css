@@ -1,32 +1,67 @@
-* { box-sizing: border-box; }
-body { margin: 0; font: 16px/1.45 system-ui, sans-serif; color: #1c1c1c; background: #f6f4ef; }
-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #1f3a34; color: #fff; }
-nav { display: flex; gap: 14px; }
-main { max-width: 980px; margin: 0 auto; padding: 16px; }
-h1 { font-size: 1.4rem; margin: .2rem 0 .8rem; } h2 { font-size: 1.05rem; margin: 1.2rem 0 .4rem; color: #1f3a34; }
-button, .btn { font: inherit; font-weight: 600; padding: 10px 16px; border-radius: 8px; border: 0; background: #1f3a34; color: #fff; cursor: pointer; text-decoration: none; display: inline-block; }
-button.ghost, .btn.ghost { background: transparent; color: #1f3a34; border: 2px solid #1f3a34; }
-button.danger { background: #b42318; } button.link { background: none; color: #fff; padding: 4px 0; text-decoration: underline; font-weight: 400; }
-button:disabled { opacity: .45; cursor: default; }
-input, select, textarea { font: inherit; padding: 9px; border: 2px solid #c8c8c8; border-radius: 8px; width: 100%; background: #fff; }
-label { display: block; font-weight: 600; margin: 10px 0 2px; } .row { display: flex; gap: 12px; flex-wrap: wrap; } .row > * { flex: 1; min-width: 120px; }
-.card { background: #fff; border-radius: 12px; padding: 14px 16px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-.error { color: #b42318; min-height: 1.3em; } .muted { color: #666; font-size: .9rem; }
-table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid #e3e3e3; vertical-align: middle; }
-th { font-size: .8rem; text-transform: uppercase; color: #555; }
-tr.click { cursor: pointer; } tr.click:hover { background: #f1f4f2; }
-.badge { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: .78rem; font-weight: 700; }
-.badge.new { background: #fff3cd; color: #7a5b00; } .badge.measured { background: #d7f0dd; color: #1a6b32; } .badge.warn { background: #f9d6d2; color: #9b1c12; }
-.conf-high { color: #1a7f37; font-weight: 700; } .conf-medium { color: #9a6700; font-weight: 700; } .conf-low { color: #b42318; font-weight: 700; }
-td input { width: 90px; padding: 5px 6px; } td.edited input { background: #fff3cd; border-color: #d4a72c; }
-.why { font-size: .82rem; color: #555; } .big { font-size: 2rem; font-weight: 800; color: #1f3a34; }
-.preview { max-width: 300px; width: 100%; border-radius: 10px; display: block; }
-.linkbox { display: flex; gap: 8px; } .linkbox input { flex: 1; }
-.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
-@media (max-width: 640px) { .hide-sm { display: none; } td input { width: 72px; } }
+/* Tailor dashboard: denser than the customer pages, built for scanning orders and checking numbers. Tokens from /shared/base.css. */
+body { font-size: 16px; }
+.top { display: flex; justify-content: space-between; align-items: center; padding: 12px clamp(16px, 4vw, 32px); background: var(--indigo); color: #fff; }
+.brand { font-weight: 800; letter-spacing: -.01em; font-size: 1.1rem; }
+nav { display: flex; gap: 20px; }
+button.link { background: none; border: 0; color: #fff; padding: 4px 0; font-weight: 700; text-decoration: none; border-bottom: 2px solid transparent; border-radius: 0; }
+button.link:hover { background: none; border-bottom-color: var(--tape); }
 
-.tapefirst { background: #fff3cd; border: 1px solid #d4a72c; border-radius: 8px; padding: 10px 12px; margin: 10px 0; }
-tr.tape-now td:first-child { border-left: 4px solid #d4a72c; }
-.spark { display: flex; gap: 3px; align-items: flex-end; height: 36px; } .spark i { display: block; width: 10px; background: #1f3a34; min-height: 2px; }
-.good { color: #1a6b32; font-weight: 700; }
-.badge.repeat { background: #e0e7ff; color: #2b3a8a; } td.up { color: #9b1c12; font-weight: 700; } td.down { color: #1a6b32; font-weight: 700; }
+main { max-width: 1040px; margin: 0 auto; padding: 24px clamp(16px, 4vw, 32px) 48px; }
+h1 { font-size: 1.6rem; margin: 0 0 .3rem; }
+h2 { font-size: 1.1rem; margin: 0 0 .6rem; }
+h3 { margin: 1rem 0 .3rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: .92rem; }
+
+button, .btn { padding: 9px 16px; }
+label { margin: 12px 0 4px; font-size: .95rem; }
+.row { display: flex; gap: 14px; flex-wrap: wrap; } .row > * { flex: 1; min-width: 130px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-panel); padding: 18px 20px; margin: 14px 0; }
+form.card { max-width: 560px; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
+.linkbox { display: flex; gap: 8px; } .linkbox input { flex: 1; }
+details summary { cursor: pointer; font-weight: 700; color: var(--indigo); margin: 14px 0 4px; }
+
+/* Tables: sentence-case headers, tabular numbers, a ruled header line instead of shading. */
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: .85rem; font-weight: 700; color: var(--muted); padding: 8px 8px; border-bottom: 1.5px solid var(--ink); white-space: nowrap; }
+td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: 0; }
+tr.click { cursor: pointer; } tr.click:hover td { background: var(--indigo-wash); }
+tr.click:focus-visible { outline: 3px solid var(--tape); outline-offset: -3px; box-shadow: none; }
+td input { width: 92px; padding: 6px 8px; font-variant-numeric: tabular-nums; font-weight: 700; }
+td.edited input { background: var(--medium-wash); border-color: var(--medium); }
+.why { font-size: .82rem; color: var(--muted); font-weight: 400; }
+
+/* Status badges */
+.badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: .8rem; font-weight: 700; margin: 2px 4px 2px 0; }
+.badge.new { background: var(--medium-wash); color: #6e4100; }
+.badge.measured { background: var(--high-wash); color: #12502f; }
+.badge.warn { background: var(--low-wash); color: #8f2414; }
+.badge.repeat { background: var(--indigo-wash); color: var(--indigo); }
+
+/* The numbers to check first are marked like a chalk line on the cloth. */
+.tapefirst { background: var(--medium-wash); border-left: 4px solid var(--tape); border-radius: 0 var(--radius-control) var(--radius-control) 0; padding: 12px 14px; margin: 12px 0; }
+.tapefirst strong { color: #5a3600; }
+tr.tape-now td:first-child { box-shadow: inset 4px 0 0 var(--tape); }
+
+.big { font-size: 2.2rem; font-weight: 800; color: var(--indigo); letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.preview { max-width: 320px; width: 100%; border-radius: var(--radius-control); display: block; }
+.notice { padding: 10px 12px; border-radius: var(--radius-control); }
+.notice.error { background: var(--low-wash); }
+
+/* Accuracy */
+.spark { display: flex; gap: 3px; align-items: flex-end; height: 36px; } .spark i { display: block; width: 9px; background: var(--indigo); min-height: 2px; border-radius: 2px 2px 0 0; }
+.good { color: var(--high); font-weight: 700; }
+td.up { color: var(--low); font-weight: 700; } td.down { color: var(--high); font-weight: 700; }
+
+/* Wide tables scroll inside their card on small screens instead of pushing the page sideways. */
+.card { overflow-x: auto; }
+td button { white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .hide-sm { display: none; }
+  .card { padding: 14px; }
+  th, td { padding-left: 2px; padding-right: 2px; }
+  td input { width: 62px; padding: 6px; }
+  td button { padding: 5px 7px !important; font-size: .76rem !important; }  /* beats the inline size on "Tape agrees" */
+}

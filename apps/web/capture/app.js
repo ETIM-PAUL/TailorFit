@@ -22,6 +22,7 @@
   function show(step, label) {
     STEPS.forEach(function (s) { $("step-" + s).hidden = s !== step; });
     $("progress").textContent = label || "";
+    document.body.dataset.step = step === "capture" ? state.view || "front" : step;  // moves the marker along the header tape
     window.scrollTo(0, 0);
   }
 
@@ -330,7 +331,9 @@
       var inch = document.createElement("td"); inch.textContent = m.value_in.toFixed(1);
       var conf = document.createElement("td"); conf.className = "conf " + m.confidence_label;
       conf.textContent = m.confidence_label;
-      var why = document.createElement("span"); why.className = "reason"; why.textContent = m.reason; conf.appendChild(why);
+      if (m.reason !== "measured from clear masks") {  // the default says nothing useful to a customer
+        var why = document.createElement("span"); why.className = "reason"; why.textContent = m.reason; conf.appendChild(why);
+      }
       [name, cm, inch, conf].forEach(function (td) { tr.appendChild(td); });
       tb.appendChild(tr);
     });

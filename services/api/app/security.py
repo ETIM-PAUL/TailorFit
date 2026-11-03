@@ -20,6 +20,10 @@ def security_headers(request: Request, headers) -> None:
     headers["Content-Security-Policy"] = CSP
     if request.url.path.startswith("/v1/"):
         headers["Cache-Control"] = "no-store"
+    elif request.url.path.startswith("/shared/fonts/"):
+        headers["Cache-Control"] = "public, max-age=604800"  # the font never changes between releases
+    else:
+        headers["Cache-Control"] = "no-cache"  # pages, styles and scripts: revalidate so an update shows up at once
     if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
         headers["Strict-Transport-Security"] = "max-age=31536000"
 

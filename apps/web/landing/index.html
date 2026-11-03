@@ -3,44 +3,53 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#1f3a34">
-  <title>TailorFit · Measurements from two photos</title>
+  <meta name="theme-color" content="#22306b">
+  <title>TailorFit: measurements from two photos</title>
   <meta name="description" content="TailorFit turns two phone photos and a height into a tailor's measurement sheet, shows the outfit in your own fabric, and works out how much cloth to buy.">
-  <link rel="icon" href="data:,">
+  <link rel="icon" href="/shared/icon.svg" type="image/svg+xml">
+  <link rel="preload" href="/shared/fonts/atkinson-hyperlegible-next.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/shared/base.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
-  <strong class="brand">TailorFit</strong>
+<header class="top">
+  <a class="brand" href="/">TailorFit</a>
   <a class="login" href="/dashboard/">Tailor login</a>
 </header>
 
 <main>
   <section class="hero">
-    <h1>Measurements from two photos.<br>Ready for your tailor in about a minute.</h1>
-    <p>TailorFit turns two phone photos and your height into a tailor's measurement sheet, shows you the outfit in your own fabric, and works out how much cloth to buy.</p>
+    <h1>Measurements from two photos.</h1>
+    <p class="lede">Your customer sends a front photo, a side photo and their height. You get twelve measurements in about a minute, each one marked with how sure we are, so you know which to check with your tape.</p>
   </section>
 
-  <section class="who">
-    <article class="card">
-      <h2>I'm a tailor</h2>
-      <p>Add a customer, send them a link, review and adjust their measurements, and print a cutting sheet.</p>
+  <figure class="hero-tape" aria-label="Example on a tape measure: bust 92 centimetres, high confidence; waist 76, check with a tape; hip 98, high confidence.">
+    <div class="tape tape-hero" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <span class="pin up low" style="--at: 76" aria-hidden="true"><b>76.0</b> Waist: tape this</span>
+    <span class="pin down" style="--at: 92" aria-hidden="true"><b>92.0</b> Bust</span>
+    <span class="pin up" style="--at: 98" aria-hidden="true"><b>98.0</b> Hip</span>
+  </figure>
+
+  <section class="roles">
+    <article class="role tailor">
+      <h2>For tailors</h2>
+      <p>Add a customer, send them a link, then check their numbers, see the outfit in their fabric, and print a cutting sheet with the yardage.</p>
       <a class="btn" href="/dashboard/">Log in to the dashboard</a>
     </article>
-    <article class="card">
-      <h2>I'm a customer</h2>
-      <p>Open the link your tailor sent you, on your phone. You'll take two photos and enter your height.</p>
-      <a class="btn ghost" href="/capture/">Try a demo</a>
-      <p class="small">A demo isn't linked to any tailor and saves nothing.</p>
+    <article class="role customer">
+      <h2>Got a link from your tailor?</h2>
+      <p>Open it on your phone. You'll enter your height and take two photos, and your tailor gets your measurements.</p>
+      <a class="btn ghost" href="/capture/">Try the photo steps</a>
+      <p class="small">The demo isn't linked to a tailor and saves nothing.</p>
     </article>
   </section>
 
-  <section>
+  <section class="how">
     <h2>How it works</h2>
     <ol class="steps">
       <li><strong>Your tailor sends you a link.</strong> Open it on your phone.</li>
-      <li><strong>Take two photos.</strong> Stand straight in fitted clothes: one from the front, one from the side. Add a photo of your fabric to see the outfit.</li>
-      <li><strong>Your tailor gets your measurements.</strong> Each number carries a confidence mark, and your tailor checks them before cutting.</li>
+      <li><strong>Take two photos.</strong> Stand straight in fitted clothes, once facing the phone and once side on. Add a photo of your fabric to see the outfit.</li>
+      <li><strong>Your tailor gets your measurements.</strong> Every number is marked high, medium or low, and your tailor checks the uncertain ones before cutting.</li>
     </ol>
   </section>
 
