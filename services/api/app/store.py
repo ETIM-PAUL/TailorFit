@@ -17,6 +17,12 @@ ROOT = Path(__file__).resolve().parents[3]
 _lock = threading.Lock()
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS tailors (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, shop_name TEXT NOT NULL DEFAULT '', email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL, is_demo INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY, tailor_id INTEGER NOT NULL REFERENCES tailors(id) ON DELETE CASCADE,
+  expires_at REAL NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS customers (
   id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, phone TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS orders (
@@ -53,6 +59,8 @@ def _conn() -> sqlite3.Connection:
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA foreign_keys = ON")
     c.executescript(SCHEMA)
+    if "tailor_id" not in {r["name"] for r in c.execute("PRAGMA table_info(customers)")}:
+        c.execute("ALTER TABLE customers ADD COLUMN tailor_id INTEGER REFERENCES tailors(id) ON DELETE CASCADE")  # who owns this customer
     cols = {r["name"] for r in c.execute("PRAGMA table_info(orders)")}
     if "applied_json" not in cols:
         c.execute("ALTER TABLE orders ADD COLUMN applied_json TEXT NOT NULL DEFAULT '{}'")  # older databases
@@ -70,17 +78,19 @@ def _row(r: sqlite3.Row | None) -> dict | None:
     return d
 
 
-_ORDER_SQL = ("SELECT o.*, c.name AS customer_name, c.phone AS customer_phone FROM orders o "
+_ORDER_SQL = ("SELECT o.*, c.name AS customer_name, c.phone AS customer_phone, c.tailor_id AS tailor_id FROM orders o "
               "JOIN customers c ON c.id = o.customer_id ")
 
 
-def create_order(name: str, phone: str | None, style_id: str | None, fabric_width_in: int = 45, *, customer_id: int | None = None,
+def create_order(name: str, phone: str | None, style_id: str | None, fabric_width_in: int = 45, *, tailor_id: int | None = None,
+                 customer_id: int | None = None,
                  sheet: dict | None = None, height_cm: float | None = None, measured_at: str | None = None,
                  carried_from: int | None = None) -> dict:
     """A new order, for a new customer or (customer_id) a returning one. With `sheet` the order starts out measured,
     reusing an earlier order's numbers (carried_from says which one)."""
     with _lock, _conn() as c:
-        cid = customer_id or c.execute("INSERT INTO customers (name, phone, created_at) VALUES (?, ?, ?)", (name, phone, now())).lastrowid
+        cid = customer_id or c.execute("INSERT INTO customers (name, phone, tailor_id, created_at) VALUES (?, ?, ?, ?)",
+                                       (name, phone, tailor_id, now())).lastrowid
         oid = c.execute("INSERT INTO orders (customer_id, capture_token, style_id, fabric_width_in, created_at, status, sheet_json, height_cm, measured_at, carried_from) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (cid, secrets.token_urlsafe(16), style_id, fabric_width_in, now(), "measured" if sheet else "new",
@@ -103,9 +113,12 @@ def get_by_token(token: str) -> dict | None:
         return _row(c.execute(_ORDER_SQL + "WHERE o.capture_token = ?", (token,)).fetchone())
 
 
-def list_orders() -> list[dict]:
+def list_orders(tailor_id: int | None = None) -> list[dict]:
+    """Newest first. With tailor_id, only that tailor's orders (None means every order, for the WhatsApp webhook)."""
     with _conn() as c:
-        return [_row(r) for r in c.execute(_ORDER_SQL + "ORDER BY o.id DESC").fetchall()]
+        if tailor_id is None:
+            return [_row(r) for r in c.execute(_ORDER_SQL + "ORDER BY o.id DESC").fetchall()]
+        return [_row(r) for r in c.execute(_ORDER_SQL + "WHERE c.tailor_id = ? ORDER BY o.id DESC", (tailor_id,)).fetchall()]
 
 
 def attach_sheet(token: str, sheet: dict, height_cm: float, keep_photos: bool, applied: dict | None = None) -> None:
@@ -151,9 +164,74 @@ def set_tape(order_id: int, rows: dict[str, dict | None]) -> None:
                           (order_id, name, r["predicted_cm"], r["raw_cm"], r["tape_cm"], r["label"], now()))
 
 
-def list_tape() -> list[dict]:
+def list_tape(tailor_id: int) -> list[dict]:
+    """One tailor's tape values: each tailor's accuracy (and learned offsets) come from their own tape only."""
     with _conn() as c:
-        return [dict(r) for r in c.execute("SELECT * FROM tape_log ORDER BY recorded_at, order_id, name")]
+        return [dict(r) for r in c.execute(
+            "SELECT t.* FROM tape_log t JOIN orders o ON o.id = t.order_id JOIN customers c ON c.id = o.customer_id "
+            "WHERE c.tailor_id = ? ORDER BY t.recorded_at, t.order_id, t.name", (tailor_id,))]
+
+
+# ---- tailor accounts and their sessions ----
+
+def create_tailor(name: str, shop_name: str, email: str, password_hash: str, is_demo: bool = False) -> dict | None:
+    """None if the email is already taken."""
+    with _lock, _conn() as c:
+        try:
+            tid = c.execute("INSERT INTO tailors (name, shop_name, email, password_hash, is_demo, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                            (name, shop_name, email, password_hash, int(is_demo), now())).lastrowid
+        except sqlite3.IntegrityError:
+            return None
+        return dict(c.execute("SELECT * FROM tailors WHERE id = ?", (tid,)).fetchone())
+
+
+def get_tailor(tailor_id: int) -> dict | None:
+    with _conn() as c:
+        r = c.execute("SELECT * FROM tailors WHERE id = ?", (tailor_id,)).fetchone()
+        return dict(r) if r else None
+
+
+def get_tailor_by_email(email: str) -> dict | None:
+    with _conn() as c:
+        r = c.execute("SELECT * FROM tailors WHERE email = ?", (email,)).fetchone()
+        return dict(r) if r else None
+
+
+def update_tailor(tailor_id: int, **fields) -> None:
+    allowed = {"name", "shop_name", "password_hash"}
+    if not fields or set(fields) - allowed:
+        raise ValueError(set(fields) - allowed)
+    with _lock, _conn() as c:
+        c.execute(f"UPDATE tailors SET {', '.join(k + ' = ?' for k in fields)} WHERE id = ?", (*fields.values(), tailor_id))
+
+
+def claim_unowned(tailor_id: int) -> int:
+    """Give customers from before accounts existed to this tailor. Returns how many."""
+    with _lock, _conn() as c:
+        return c.execute("UPDATE customers SET tailor_id = ? WHERE tailor_id IS NULL", (tailor_id,)).rowcount
+
+
+def add_session(token_hash: str, tailor_id: int, expires_at: float) -> None:
+    with _lock, _conn() as c:
+        c.execute("DELETE FROM sessions WHERE expires_at < strftime('%s','now')")
+        c.execute("INSERT INTO sessions (token_hash, tailor_id, expires_at, created_at) VALUES (?, ?, ?, ?)", (token_hash, tailor_id, expires_at, now()))
+
+
+def session_tailor(token_hash: str, at: float) -> dict | None:
+    with _conn() as c:
+        r = c.execute("SELECT t.* FROM sessions s JOIN tailors t ON t.id = s.tailor_id WHERE s.token_hash = ? AND s.expires_at > ?",
+                      (token_hash, at)).fetchone()
+        return dict(r) if r else None
+
+
+def delete_session(token_hash: str) -> None:
+    with _lock, _conn() as c:
+        c.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
+
+
+def delete_other_sessions(tailor_id: int, keep_hash: str | None) -> None:
+    with _lock, _conn() as c:
+        c.execute("DELETE FROM sessions WHERE tailor_id = ? AND token_hash IS NOT ?", (tailor_id, keep_hash))
 
 
 def set_preview_flag(order_id: int, has: bool) -> None:

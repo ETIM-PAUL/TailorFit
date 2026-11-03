@@ -80,7 +80,7 @@ def test_offset_is_learned_only_after_enough_orders_and_is_not_double_counted(ta
     assert tailor.get(f"/v1/orders/{after}").json()["measurements"][1]["original_cm"] == 76  # waist had no tape history: untouched
     # The log compares the tape with the RAW estimate (92), so the offset is not learned twice.
     tape(tailor, after, bust_chest=89.0)
-    row = [r for r in store.list_tape() if r["order_id"] == after][0]
+    row = [r for r in store.list_tape(store.get_tailor_by_email("ada")["id"]) if r["order_id"] == after][0]
     assert row["raw_cm"] == 92.0 and row["predicted_cm"] == bust["original_cm"]
 
 

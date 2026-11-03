@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import Response as RawResponse
 from pydantic import BaseModel, Field
 
-from . import auth, cutting_sheet, learning, pipeline, repeat, store, whatsapp
+from . import auth, cutting_sheet, learning, pipeline, repeat, security, store, whatsapp
 
 router = APIRouter(prefix="/v1")
 tailor = Depends(auth.require_tailor)
@@ -92,26 +92,48 @@ def full_view(o: dict) -> dict:
     return order_view(o) | {"order_count": len(orders), "changes": repeat.changes(o, orders), "can_repeat": repeat.latest_source(orders) is not None}
 
 
-def _get(order_id: int) -> dict:
+def _get(order_id: int, me: dict) -> dict:
+    """The order, if it belongs to this tailor. Someone else's order is "not found", so ids can't be probed."""
     o = store.get_order(order_id)
-    if not o:
+    if not o or o.get("tailor_id") != me["id"]:
         raise HTTPException(404, "Order not found.")
     return o
 
 
-# ---------------- tailor login ----------------
+# ---------------- tailor accounts ----------------
+
+def _set_cookie(request: Request, response: Response, token: str) -> None:
+    response.set_cookie(auth.COOKIE, token, httponly=True, samesite="lax", max_age=auth.SESSION_SECONDS,
+                        secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+                        or os.environ.get("COOKIE_SECURE") == "1")
+
+
+def _client(request: Request) -> str:
+    return request.client.host if request.client else "?"
+
+
+class Signup(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    shop_name: str = Field("", max_length=120)
+    email: str = Field(min_length=3, max_length=200)
+    password: str = Field(max_length=200)
+
+
+@router.post("/auth/signup", dependencies=[Depends(security.limit("signup", 5, 600))])
+def signup(body: Signup, request: Request, response: Response):
+    t = auth.signup(body.name, body.shop_name, body.email, body.password)
+    _set_cookie(request, response, auth.start_session(t["id"]))
+    return {"ok": True, "tailor": auth.public(t)}
+
 
 class Login(BaseModel):
-    username: str
-    password: str
+    email: str = Field(max_length=200)
+    password: str = Field(max_length=200)
 
 
 @router.post("/auth/login")
 def login(body: Login, request: Request, response: Response):
-    token = auth.login(body.username, body.password, request.client.host if request.client else "?")
-    response.set_cookie(auth.COOKIE, token, httponly=True, samesite="lax", max_age=auth.SESSION_SECONDS,
-                        secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
-                        or os.environ.get("COOKIE_SECURE") == "1")
+    _set_cookie(request, response, auth.login(body.email, body.password, _client(request)))
     return {"ok": True}
 
 
@@ -123,8 +145,37 @@ def logout(request: Request, response: Response):
 
 
 @router.get("/auth/me")
-def me(request: Request):
-    return {"logged_in": auth.is_logged_in(request), "configured": auth.configured()}
+def me_endpoint(request: Request):
+    t = auth.current(request)
+    return {"logged_in": t is not None, "tailor": auth.public(t) if t else None, "signup_allowed": auth.signup_allowed()}
+
+
+class Profile(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=80)
+    shop_name: str | None = Field(None, max_length=120)
+
+
+@router.patch("/auth/me")
+def update_profile(body: Profile, me: dict = tailor):
+    fields = {k: v.strip() for k, v in (("name", body.name), ("shop_name", body.shop_name)) if v is not None}
+    if fields.get("name") == "":
+        raise HTTPException(422, "Enter your name.")
+    if fields:
+        store.update_tailor(me["id"], **fields)
+    return {"tailor": auth.public(store.get_tailor(me["id"]))}
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(max_length=200)
+    new_password: str = Field(max_length=200)
+
+
+@router.post("/auth/password", dependencies=[Depends(security.limit("password", 5, 300))])
+def change_password(body: PasswordChange, request: Request, me: dict = tailor):
+    if me["is_demo"]:
+        raise HTTPException(403, "The demo account's password can't be changed.")
+    auth.change_password(me, body.current_password, body.new_password, request.cookies.get(auth.COOKIE))
+    return {"ok": True}
 
 
 # ---------------- orders (tailor only) ----------------
@@ -136,28 +187,29 @@ class NewOrder(BaseModel):
     fabric_width_in: int = 45
 
 
-@router.post("/orders", dependencies=[tailor])
-def create_order(body: NewOrder):
+@router.post("/orders")
+def create_order(body: NewOrder, me: dict = tailor):
     if body.style_id and body.style_id not in pipeline.CATALOG:
         raise HTTPException(422, f"unknown style: {body.style_id}")
     if body.fabric_width_in not in FABRIC_WIDTHS:
         raise HTTPException(422, "fabric width must be 36, 45 or 60 inches")
-    return full_view(store.create_order(body.customer_name.strip(), (body.phone or "").strip() or None, body.style_id, body.fabric_width_in))
+    return full_view(store.create_order(body.customer_name.strip(), (body.phone or "").strip() or None, body.style_id, body.fabric_width_in,
+                                         tailor_id=me["id"]))
 
 
-@router.get("/orders", dependencies=[tailor])
-def list_orders():
+@router.get("/orders")
+def list_orders(me: dict = tailor):
     out = []
-    for o in store.list_orders():
+    for o in store.list_orders(me["id"]):
         v = order_view(o)
         out.append({k: v[k] for k in ("id", "status", "customer", "style", "created_at", "measured_at", "low_confidence", "capture_url", "stub", "carried_from")}
                     | {"yardage": v["yardage"]["display"] if v["yardage"] and "display" in v["yardage"] else None})
     return out
 
 
-@router.get("/orders/{order_id}", dependencies=[tailor])
-def get_order(order_id: int):
-    return full_view(_get(order_id))
+@router.get("/orders/{order_id}")
+def get_order(order_id: int, me: dict = tailor):
+    return full_view(_get(order_id, me))
 
 
 class RepeatOrder(BaseModel):
@@ -165,10 +217,10 @@ class RepeatOrder(BaseModel):
     fabric_width_in: int | None = None
 
 
-@router.post("/orders/{order_id}/repeat", dependencies=[tailor])
-def repeat_order(order_id: int, body: RepeatOrder):
+@router.post("/orders/{order_id}/repeat")
+def repeat_order(order_id: int, body: RepeatOrder, me: dict = tailor):
     """A new order for the same customer, starting from their latest numbers (no new photos needed)."""
-    o = _get(order_id)
+    o = _get(order_id, me)
     src = repeat.latest_source(store.orders_for_customer(o["customer_id"]))
     if not src:
         raise HTTPException(409, "This customer has no measurements to reuse yet.")
@@ -178,7 +230,7 @@ def repeat_order(order_id: int, body: RepeatOrder):
     width = body.fabric_width_in or o["fabric_width_in"]
     if width not in FABRIC_WIDTHS:
         raise HTTPException(422, "fabric width must be 36, 45 or 60 inches")
-    new = store.create_order(o["customer_name"], o["customer_phone"], style or None, width, customer_id=o["customer_id"],
+    new = store.create_order(o["customer_name"], o["customer_phone"], style or None, width, tailor_id=me["id"], customer_id=o["customer_id"],
                              sheet=repeat.carry_sheet(src), height_cm=src.get("height_cm"), measured_at=src.get("measured_at"), carried_from=src["id"])
     return full_view(new)
 
@@ -191,9 +243,9 @@ class Patch(BaseModel):
     phone: str | None = Field(None, max_length=40)
 
 
-@router.patch("/orders/{order_id}", dependencies=[tailor])
-def patch_order(order_id: int, body: Patch):
-    o = _get(order_id)
+@router.patch("/orders/{order_id}")
+def patch_order(order_id: int, body: Patch, me: dict = tailor):
+    o = _get(order_id, me)
     fields = {}
     if body.style_id is not None:
         if body.style_id and body.style_id not in pipeline.CATALOG:
@@ -220,16 +272,16 @@ def patch_order(order_id: int, body: Patch):
             raise HTTPException(422, str(e))
         fields["allowances"] = merged
     store.update_order(order_id, **fields)
-    return full_view(_get(order_id))
+    return full_view(_get(order_id, me))
 
 
 class Edits(BaseModel):
     edits: dict[str, float | None]
 
 
-@router.put("/orders/{order_id}/measurements", dependencies=[tailor])
-def put_measurements(order_id: int, body: Edits):
-    o = _get(order_id)
+@router.put("/orders/{order_id}/measurements")
+def put_measurements(order_id: int, body: Edits, me: dict = tailor):
+    o = _get(order_id, me)
     if not o.get("sheet"):
         raise HTTPException(409, "This customer has not sent photos yet.")
     edits = dict(o.get("edits") or {})
@@ -244,7 +296,7 @@ def put_measurements(order_id: int, body: Edits):
             edits[name] = round(value, 1)
     store.update_order(order_id, edits=edits)
     _record_tape(o, body.edits)
-    return full_view(_get(order_id))
+    return full_view(_get(order_id, me))
 
 
 def _record_tape(o: dict, changed: dict[str, float | None]) -> None:
@@ -263,23 +315,23 @@ def _record_tape(o: dict, changed: dict[str, float | None]) -> None:
     store.set_tape(o["id"], rows)
 
 
-@router.get("/accuracy", dependencies=[tailor])
-def accuracy():
-    return learning.accuracy()
+@router.get("/accuracy")
+def accuracy(me: dict = tailor):
+    return learning.accuracy(me["id"])
 
 
-@router.get("/orders/{order_id}/preview.jpg", dependencies=[tailor])
-def get_preview(order_id: int):
-    _get(order_id)
+@router.get("/orders/{order_id}/preview.jpg")
+def get_preview(order_id: int, me: dict = tailor):
+    _get(order_id, me)
     data = store.read_file(order_id, "preview.jpg")
     if data is None:
         raise HTTPException(404, "No preview for this order.")
     return RawResponse(data, media_type="image/jpeg", headers={"Cache-Control": "private, no-store"})
 
 
-@router.get("/orders/{order_id}/cutting-sheet.pdf", dependencies=[tailor])
-def get_cutting_sheet(order_id: int):
-    view = order_view(_get(order_id))
+@router.get("/orders/{order_id}/cutting-sheet.pdf")
+def get_cutting_sheet(order_id: int, me: dict = tailor):
+    view = order_view(_get(order_id, me))
     if not view["measurements"]:
         raise HTTPException(409, "This customer has not sent photos yet.")
     pdf = cutting_sheet.build_pdf(view, store.read_file(order_id, "preview.jpg"))
@@ -287,10 +339,10 @@ def get_cutting_sheet(order_id: int):
                        headers={"Content-Disposition": f'inline; filename="cutting-sheet-{order_id}.pdf"', "Cache-Control": "private, no-store"})
 
 
-@router.post("/orders/{order_id}/send-whatsapp", dependencies=[tailor])
-def send_whatsapp(order_id: int, request: Request):
+@router.post("/orders/{order_id}/send-whatsapp")
+def send_whatsapp(order_id: int, request: Request, me: dict = tailor):
     """Send the customer their capture link over WhatsApp (needs the Cloud API settings)."""
-    o = _get(order_id)
+    o = _get(order_id, me)
     if not whatsapp.configured():
         raise HTTPException(503, "Automatic WhatsApp sending is not set up. Use the Open WhatsApp button instead.")
     base = whatsapp.public_base_url() or (request.headers.get("origin") or "").rstrip("/")
@@ -302,14 +354,15 @@ def send_whatsapp(order_id: int, request: Request):
         raise HTTPException(502, str(e))
 
 
-@router.delete("/orders/{order_id}/photos", dependencies=[tailor])
-def delete_photos(order_id: int):
-    _get(order_id)
+@router.delete("/orders/{order_id}/photos")
+def delete_photos(order_id: int, me: dict = tailor):
+    _get(order_id, me)
     return {"deleted_files": store.delete_photos(order_id)}
 
 
-@router.delete("/orders/{order_id}", dependencies=[tailor])
-def delete_order(order_id: int):
+@router.delete("/orders/{order_id}")
+def delete_order(order_id: int, me: dict = tailor):
+    _get(order_id, me)
     if not store.delete_order(order_id):
         raise HTTPException(404, "Order not found.")
     return {"ok": True}

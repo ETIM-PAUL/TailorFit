@@ -159,7 +159,7 @@ def tailor(tmp_path, monkeypatch):
     monkeypatch.setenv("TAILORFIT_DB", str(tmp_path / "t.db")); monkeypatch.setenv("TAILORFIT_PHOTOS", str(tmp_path / "p"))
     auth.reset()
     c = TestClient(app)
-    assert c.post("/v1/auth/login", json={"username": "ada", "password": "pw-for-tests"}).status_code == 200
+    assert c.post("/v1/auth/login", json={"email": "ada", "password": "pw-for-tests"}).status_code == 200
     return c
 
 
@@ -167,7 +167,7 @@ def test_requests_from_other_websites_are_refused(tailor):
     evil = {"Origin": "https://evil.example"}
     assert tailor.post("/v1/orders", json={"customer_name": "X"}, headers=evil).status_code == 403
     assert tailor.post("/v1/auth/logout", headers=evil).status_code == 403
-    assert tailor.post("/v1/auth/login", json={"username": "a", "password": "b"}, headers=evil).status_code == 403
+    assert tailor.post("/v1/auth/login", json={"email": "a", "password": "b"}, headers=evil).status_code == 403
     assert tailor.get("/v1/orders", headers=evil).status_code == 200          # reading is not state-changing, and SameSite covers cookies
 
 
@@ -223,7 +223,7 @@ def test_limits_can_be_switched_off_for_load_tests(monkeypatch):
 
 def test_cookie_is_secure_over_https_or_when_forced(tmp_path, monkeypatch):
     monkeypatch.setenv("TAILOR_USERNAME", "ada"); monkeypatch.setenv("TAILOR_PASSWORD", "pw-for-tests")
-    body = {"username": "ada", "password": "pw-for-tests"}
+    body = {"email": "ada", "password": "pw-for-tests"}
     plain = TestClient(app).post("/v1/auth/login", json=body).headers["set-cookie"].lower()
     assert "httponly" in plain and "samesite=lax" in plain and "secure" not in plain.replace("samesite", "")
     auth.reset()

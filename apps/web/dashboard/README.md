@@ -1,20 +1,25 @@
-# Tailor dashboard (phase 12)
+# Tailor dashboard
 
 Served by the API at `/dashboard/`. Plain HTML and JavaScript, no build step.
 
-## Set up
+## Accounts
 
-Put a username and password in `.env` (`TAILOR_USERNAME`, `TAILOR_PASSWORD`). There is no default: with
-these empty the dashboard stays off. Orders go in `data/tailorfit.db` and kept photos in `data/photos/`
-(override with `TAILORFIT_DB` / `TAILORFIT_PHOTOS`). `data/` is git-ignored.
+Each tailor has their own account and sees only their own customers, tape history and learned corrections.
 
-## Logging in
+- **Create an account**: open `/dashboard/#signup` (the home page's "Get started" button). Name, optional shop name,
+  email and a password of at least 8 characters. Set `ALLOW_SIGNUP=0` to switch sign-up off.
+- **Log in** at `/dashboard/`. Five wrong passwords for one email from one address lock it for five minutes.
+- **Settings**: change your name and shop name (shown on the orders page), change your password (this logs out
+  every other device), and log out (on phones, Log out is only here).
+- Logins last two weeks and survive a server restart.
+- **Demo account for judges**: set `DEMO_PASSWORD` (and optionally `DEMO_EMAIL`, default `demo@tailorfit.app`). The
+  account is created on the first login with three sample customers, each labelled "(sample)" with a note that the
+  numbers are made up. Its password can't be changed from the app.
+- **Older setups**: if `TAILOR_USERNAME` / `TAILOR_PASSWORD` are set, that login still works. The account is created on
+  its first login (after that, change the password in Settings) and takes over customers from before accounts existed.
 
-1. Open the site's home page and click **Tailor login** (or go straight to `/dashboard/`).
-2. Enter the `TAILOR_USERNAME` and `TAILOR_PASSWORD` you set. To keep them permanently, add them to `.env`
-   and restart the server. For one run only, put them in front of the command:
-   `TAILOR_USERNAME=ada TAILOR_PASSWORD='...' .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000`
-3. Wrong password five times in five minutes locks that address out for a few minutes.
+Orders go in `data/tailorfit.db` and kept photos in `data/photos/` (override with `TAILORFIT_DB` / `TAILORFIT_PHOTOS`).
+`data/` is git-ignored.
 
 ## The tailor's flow
 
@@ -34,7 +39,7 @@ these empty the dashboard stays off. Orders go in `data/tailorfit.db` and kept p
 
 ## Known gaps
 
-- One shared tailor login; sessions are in memory, so a server restart logs everyone out.
+- No password reset yet (it needs email or SMS): a tailor who forgets their password needs the server owner's help.
 - No per-customer sharing by WhatsApp yet (phase 13): copy the link and send it yourself.
 - Photos are kept on the server's disk; the final storage choice (S3-style bucket) is still open.
 - Tested by driving real Chrome through the whole flow against the real Meta services; that script is not in

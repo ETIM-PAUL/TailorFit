@@ -43,12 +43,14 @@ def sent(env, monkeypatch):
 @pytest.fixture
 def tailor(env):
     c = TestClient(app)
-    assert c.post("/v1/auth/login", json={"username": "ada", "password": "pw-for-tests"}).status_code == 200
+    assert c.post("/v1/auth/login", json={"email": "ada", "password": "pw-for-tests"}).status_code == 200
     return c
 
 
 def order(phone="0803 000 0000", name="Ngozi Eze", style="senator"):
-    return store.create_order(name, phone, style)
+    """An order owned by the env account ("ada") when it exists, as if that tailor had created it."""
+    owner = store.get_tailor_by_email("ada")
+    return store.create_order(name, phone, style, tailor_id=owner["id"] if owner else None)
 
 
 def signed(payload: dict, secret=SECRET):

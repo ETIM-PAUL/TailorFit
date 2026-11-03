@@ -6,8 +6,11 @@
   decoded (most of Pillow's published vulnerabilities are in rare formats), pixel and size limits stop decompression bombs,
   the rotation tag is honoured, and every metadata tag (GPS location, device) is dropped by re-encoding. Bad files get a plain
   message, never a crash.
-- **Access control**: every tailor endpoint needs login (tested for each one). No default password; the dashboard is off if
-  `TAILOR_USERNAME`/`TAILOR_PASSWORD` are unset. Five wrong passwords lock an address out for five minutes. Cookies are
+- **Accounts**: every tailor endpoint needs login (tested for each one), and every order endpoint checks the order belongs
+  to that tailor; someone else's order answers "not found" (tested for every endpoint). Passwords are scrypt hashes;
+  session cookies are random tokens and only their SHA-256 is stored, with a two-week expiry. Changing a password logs out
+  other devices. Five wrong passwords for one email from one address lock it for five minutes. Sign-up is rate limited
+  and can be switched off (`ALLOW_SIGNUP=0`). Cookies are
   HttpOnly and SameSite=Lax, and Secure over HTTPS (or with `COOKIE_SECURE=1`).
 - **Customer links**: a 128-bit random token is the only thing protecting an order's upload and delete-my-photos.
 - **Cross-site requests**: a state-changing call to a tailor endpoint from another website's origin is refused.
@@ -23,7 +26,8 @@
 ## Known gaps
 
 - **Python 3.12 and Pillow 13.0.0** (the 12.3.0 advisories are fixed in 13). `pip`, `setuptools` and `filelock` may still show advisories; they are build or transitive tools, not part of the running app. Re-run `pip-audit` before deploying.
-- One shared tailor login, no password change, sessions in memory (a restart logs everyone out), login lockout is per address in memory.
+- No password reset (needs email or SMS) and no email verification, so anyone can sign up with an address they don't own.
+  The login lockout is in memory, per address and email.
 - Rate limits are in memory and per address: they cap the AI bill, they are not a defence against a determined flood.
 - A customer link never expires, and access logs record it (it is in the address). Anyone holding the link can upload to the order
   and delete its photos.

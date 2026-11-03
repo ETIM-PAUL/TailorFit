@@ -110,7 +110,7 @@ async def create_measurements(
     blurred = sheet.pop("_blurred", None)
     applied: dict = {}
     if order and not sheet.get("stub"):
-        sheet["measurements"], applied = learning.apply(sheet["measurements"])  # this tailor's earlier tape values
+        sheet["measurements"], applied = learning.apply(sheet["measurements"], order.get("tailor_id"))  # this tailor's earlier tape values
     contract.validate("MeasurementSheet", sheet)
     kept = False
     if order:

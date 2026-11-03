@@ -1,7 +1,7 @@
 (function () {
   "use strict";
-  var app = document.getElementById("app"), nav = document.getElementById("nav");
-  var timer = null, styles = [];
+  var app = document.getElementById("app");
+  var timer = null, styles = [], me = null;
 
   // ---- tiny DOM helper: everything from the server goes in as text, never as HTML ----
   function h(tag, attrs) {
@@ -27,7 +27,7 @@
     if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
     return fetch(path, opts).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (data) {
-        if (r.status === 401 && path.indexOf("/auth/login") < 0) { showLogin(); throw new Error("login"); }
+        if (r.status === 401 && !/\/auth\/(login|signup|password)/.test(path)) { showAuth("login", "Your session ended. Please log in again."); throw new Error("login"); }
         if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Something went wrong (" + r.status + ").");
         return data;
       });
@@ -37,40 +37,130 @@
   function fmtDate(s) { return s ? new Date(s).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : ""; }
   function pretty(n) { return n.replace(/_/g, " ").replace(/^./, function (c) { return c.toUpperCase(); }); }
 
-  // ---- login ----
-  function showLogin(msg) {
-    stopTimer(); nav.hidden = true;
+  // ---- app shell ----
+  function signedIn(on) { document.body.classList.toggle("signed-in", on); }
+  function setActive(view) {
+    [].forEach.call(document.querySelectorAll(".nav-item"), function (b) { if (b.dataset.view === view) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+  }
+  function fillAccount() {
+    document.getElementById("acct-shop").textContent = me ? (me.shop_name || me.name) : "";
+    document.getElementById("acct-name").textContent = me && me.shop_name ? me.name : "";
+  }
+  function pageHead(title, sub, actions) {
+    return h("div", { class: "page-head" }, h("div", null, h("h1", { text: title }), sub ? h("p", { class: "muted", text: sub }) : null), actions ? h("div", { class: "page-actions" }, actions) : null);
+  }
+
+  // ---- log in / create account ----
+  function showAuth(mode, msg) {
+    stopTimer(); signedIn(false); me = null; fillAccount();
+    var canSignup = showAuth.signupAllowed !== false;
+    if (!canSignup) mode = "login";
     var err = h("p", { class: "error", role: "alert", text: msg || "" });
-    var user = h("input", { id: "user", autocomplete: "username", required: true }), pass = h("input", { id: "pass", type: "password", autocomplete: "current-password", required: true });
-    var form = h("form", { class: "card", onsubmit: function (e) {
-      e.preventDefault(); err.textContent = "";
-      api("POST", "/v1/auth/login", { username: user.value, password: pass.value })
-        .then(function () { return start(); }).catch(function (x) { err.textContent = x.message; });
-    } }, h("h1", { text: "Tailor login" }), h("label", { for: "user", text: "Username" }), user, h("label", { for: "pass", text: "Password" }), pass, err, h("button", { type: "submit", text: "Log in" }));
-    mount(form); user.focus();
+    var f = {};
+    function field(id, label, attrs, hint) {
+      f[id] = h("input", Object.assign({ id: id, name: id, required: true }, attrs));
+      return h("div", { class: "field" }, h("label", { for: id, text: label }), f[id], hint ? h("p", { class: "hint", text: hint }) : null);
+    }
+    var signup = mode === "signup";
+    var fields = signup
+      ? [field("su-name", "Your name", { autocomplete: "name", maxlength: 80 }), field("su-shop", "Shop name", { autocomplete: "organization", maxlength: 120, required: false }, "Optional. Shown on your cutting sheets."),
+         field("su-email", "Email", { type: "email", autocomplete: "email", maxlength: 200 }), field("su-pass", "Password", { type: "password", autocomplete: "new-password", minlength: 8, maxlength: 200 }, "At least 8 characters.")]
+      : [field("li-email", "Email", { type: "email", autocomplete: "username", maxlength: 200 }), field("li-pass", "Password", { type: "password", autocomplete: "current-password", maxlength: 200 })];
+    // older setups log in with a plain username, so the login email box accepts any text
+    if (!signup) f["li-email"].type = "text";
+    var submit = h("button", { type: "submit", class: "wide", text: signup ? "Create account" : "Log in" });
+    var form = h("form", { class: "auth-form", novalidate: false, onsubmit: function (e) {
+      e.preventDefault(); err.textContent = ""; submit.disabled = true;
+      var req = signup ? api("POST", "/v1/auth/signup", { name: f["su-name"].value, shop_name: f["su-shop"].value, email: f["su-email"].value, password: f["su-pass"].value })
+                       : api("POST", "/v1/auth/login", { email: f["li-email"].value, password: f["li-pass"].value });
+      req.then(function () { history.replaceState(null, "", location.pathname); return start(); })
+         .catch(function (x) { err.textContent = x.message; submit.disabled = false; });
+    } },
+      h("h1", { text: signup ? "Create your account" : "Log in" }),
+      h("p", { class: "muted", text: signup ? "You'll get a link to send your first customer straight away." : "Welcome back. Your customers are waiting." }),
+      fields, err, submit,
+      canSignup ? h("p", { class: "switch" }, signup ? "Already have an account? " : "New to TailorFit? ",
+        h("a", { href: signup ? "#login" : "#signup", id: "auth-switch", text: signup ? "Log in" : "Create an account", onclick: function (e) { e.preventDefault(); history.replaceState(null, "", signup ? "#login" : "#signup"); showAuth(signup ? "login" : "signup"); } })) : null);
+    mount(h("div", { class: "auth" },
+      h("section", { class: "auth-brand" }, h("a", { class: "brand", href: "/", text: "TailorFit" }),
+        h("div", null, h("p", { class: "auth-line", text: "Measure your customers from two photos." }),
+          h("ul", { class: "auth-points" }, h("li", { text: "Twelve measurements in about a minute" }), h("li", { text: "Every number marked with how sure we are" }), h("li", { text: "Cutting sheet and yardage ready to print" }))),
+        h("div", { class: "tape auth-tape", "aria-hidden": "true" })),
+      h("section", { class: "auth-panel" }, form)));
+    (signup ? f["su-name"] : f["li-email"]).focus();
   }
 
   // ---- order list ----
   function showList() {
-    stopTimer(); nav.hidden = false;
-    var body = h("tbody"), empty = h("p", { class: "muted", text: "No orders yet. Add your first customer." });
+    stopTimer(); signedIn(true); setActive("orders");
+    var body = h("tbody"), tiles = h("div", { class: "tiles" }), search = h("input", { id: "search", type: "search", placeholder: "Search customers", "aria-label": "Search customers" });
+    var tableCard = h("div", { class: "card table-card" }, h("div", { class: "table-tools" }, search),
+      h("table", null, h("thead", null, h("tr", null, h("th", { text: "Customer" }), h("th", { class: "hide-sm", text: "Style" }), h("th", { text: "Status" }), h("th", { class: "hide-sm", text: "Fabric" }), h("th", { class: "hide-sm", text: "Updated" }))), body),
+      h("p", { class: "muted none", id: "no-match", hidden: true, text: "No customer matches that search." }));
+    var empty = h("div", { class: "card empty", id: "empty", hidden: true },
+      h("h2", { text: "Add your first customer" }),
+      h("ol", { class: "empty-steps" }, h("li", { text: "Add their name and the style they want." }), h("li", { text: "Send them the link. They take two photos on their phone." }), h("li", { text: "Their measurements appear here, ready to check and cut." })),
+      h("button", { text: "Add a customer", onclick: showNew }));
+    var all = [];
+    function tile(n, label, cls) { return h("div", { class: "tile " + (cls || "") }, h("span", { class: "tile-n", text: String(n) }), h("span", { class: "tile-l", text: label })); }
+    function draw() {
+      var q = search.value.trim().toLowerCase(), shown = 0; body.textContent = "";
+      all.forEach(function (o) {
+        if (q && o.customer.name.toLowerCase().indexOf(q) < 0 && (o.customer.phone || "").indexOf(q) < 0) return;
+        shown++;
+        var badges = h("span", null, h("span", { class: "badge " + o.status, text: o.status === "new" ? "Waiting for photos" : "Measured" }));
+        if (o.carried_from) badges.appendChild(h("span", { class: "badge repeat", text: "Repeat order" }));
+        if (o.low_confidence) badges.appendChild(h("span", { class: "badge warn", text: o.low_confidence + " to check" }));
+        var open = function () { showOrder(o.id); };
+        body.appendChild(h("tr", { class: "click", tabindex: 0, onclick: open, onkeydown: function (e) { if (e.key === "Enter") open(); } },
+          h("td", null, h("strong", { text: o.customer.name }), h("div", { class: "muted", text: o.customer.phone || "" })),
+          h("td", { class: "hide-sm", text: o.style ? o.style.name : "Not chosen" }), h("td", null, badges),
+          h("td", { class: "hide-sm", text: o.yardage || "" }), h("td", { class: "hide-sm muted", text: fmtDate(o.measured_at || o.created_at) })));
+      });
+      document.getElementById("no-match").hidden = shown > 0 || !all.length;
+    }
     function load() {
       api("GET", "/v1/orders").then(function (orders) {
-        body.textContent = ""; empty.hidden = orders.length > 0;
-        orders.forEach(function (o) {
-          var badges = h("span", null, h("span", { class: "badge " + o.status, text: o.status === "new" ? "Waiting for photos" : "Measured" }));
-          if (o.carried_from) badges.appendChild(h("span", { class: "badge repeat", text: " Repeat order" }));
-          if (o.low_confidence) badges.appendChild(h("span", { class: "badge warn", text: " " + o.low_confidence + " to check" }));
-          body.appendChild(h("tr", { class: "click", tabindex: 0, onclick: function () { showOrder(o.id); } },
-            h("td", null, h("strong", { text: o.customer.name }), h("div", { class: "muted", text: o.customer.phone || "" })),
-            h("td", { class: "hide-sm", text: o.style ? o.style.name : "-" }), h("td", null, badges),
-            h("td", { class: "hide-sm", text: o.yardage || "-" }), h("td", { class: "hide-sm muted", text: fmtDate(o.measured_at || o.created_at) })));
-        });
+        all = orders;
+        var waiting = orders.filter(function (o) { return o.status === "new"; }).length;
+        var toCheck = orders.reduce(function (n, o) { return n + (o.low_confidence || 0); }, 0);
+        tiles.textContent = "";
+        tiles.appendChild(tile(orders.length - waiting, "Measured")); tiles.appendChild(tile(waiting, "Waiting for photos"));
+        tiles.appendChild(tile(toCheck, toCheck === 1 ? "Number to check" : "Numbers to check", toCheck ? "attention" : ""));
+        empty.hidden = orders.length > 0; tableCard.hidden = tiles.hidden = orders.length === 0;
+        draw();
       }).catch(function () {});
     }
-    mount(h("div", { class: "row", style: "align-items:center" }, h("h1", { text: "Orders" }), h("div", { style: "text-align:right" }, h("button", { id: "new-btn", text: "+ New customer", onclick: showNew }))),
-      h("div", { class: "card" }, h("table", null, h("thead", null, h("tr", null, h("th", { text: "Customer" }), h("th", { class: "hide-sm", text: "Style" }), h("th", { text: "Status" }), h("th", { class: "hide-sm", text: "Fabric" }), h("th", { class: "hide-sm", text: "Updated" }))), body), empty));
+    search.addEventListener("input", draw);
+    mount(pageHead("Orders", me && me.shop_name ? me.shop_name : null, h("button", { id: "new-btn", text: "Add a customer", onclick: showNew })), tiles, empty, tableCard);
     load(); timer = setInterval(load, 10000);  // a customer finishing shows up on its own
+  }
+
+  // ---- settings ----
+  function showSettings() {
+    stopTimer(); signedIn(true); setActive("settings");
+    var name = h("input", { id: "set-name", value: me.name, maxlength: 80, required: true, autocomplete: "name" });
+    var shop = h("input", { id: "set-shop", value: me.shop_name, maxlength: 120, autocomplete: "organization" });
+    var pmsg = h("p", { class: "muted", role: "status" }), pwmsg = h("p", { class: "muted", role: "status" });
+    var cur = h("input", { id: "set-cur", type: "password", autocomplete: "current-password", required: true });
+    var nw = h("input", { id: "set-new", type: "password", autocomplete: "new-password", minlength: 8, required: true });
+    var profile = h("form", { class: "card form-card", onsubmit: function (e) {
+      e.preventDefault(); pmsg.className = "muted";
+      api("PATCH", "/v1/auth/me", { name: name.value, shop_name: shop.value }).then(function (r) { me = r.tailor; fillAccount(); pmsg.textContent = "Saved."; })
+        .catch(function (x) { pmsg.className = "error"; pmsg.textContent = x.message; });
+    } }, h("h2", { text: "Your details" }), h("p", { class: "muted", text: "Signed in as " + me.email }),
+      h("label", { for: "set-name", text: "Your name" }), name, h("label", { for: "set-shop", text: "Shop name" }), shop, h("p", { class: "hint", text: "Shown on your orders page and cutting sheets." }),
+      h("div", { class: "actions" }, h("button", { type: "submit", text: "Save details" }), pmsg));
+    var pw = me.is_demo ? h("div", { class: "card form-card" }, h("h2", { text: "Password" }), h("p", { class: "muted", text: "This is the shared demo account, so its password can't be changed." }))
+      : h("form", { class: "card form-card", onsubmit: function (e) {
+        e.preventDefault(); pwmsg.className = "muted";
+        api("POST", "/v1/auth/password", { current_password: cur.value, new_password: nw.value }).then(function () { cur.value = nw.value = ""; pwmsg.textContent = "Password changed. Other devices have been logged out."; })
+          .catch(function (x) { pwmsg.className = "error"; pwmsg.textContent = x.message; });
+      } }, h("h2", { text: "Change password" }), h("label", { for: "set-cur", text: "Current password" }), cur, h("label", { for: "set-new", text: "New password" }), nw, h("p", { class: "hint", text: "At least 8 characters. Changing it logs you out everywhere else." }),
+        h("div", { class: "actions" }, h("button", { type: "submit", text: "Change password" }), pwmsg));
+    var session = h("div", { class: "card form-card session" }, h("p", { text: "Logged in as " + me.email }),
+      h("button", { class: "ghost", id: "settings-logout", text: "Log out", onclick: function () { api("POST", "/v1/auth/logout").then(function () { showAuth("login"); }); } }));
+    mount(pageHead("Settings"), profile, pw, session);
   }
 
   // ---- new customer ----
@@ -81,32 +171,33 @@
     s.value = selected || ""; return s;
   }
   function showNew() {
-    stopTimer();
+    stopTimer(); setActive("orders");
     var err = h("p", { class: "error", role: "alert" });
     var name = h("input", { id: "cname", required: true, maxlength: 120 }), phone = h("input", { id: "cphone", type: "tel", maxlength: 40 }), st = styleSelect("senator", true);
     var width = h("select", { id: "cwidth" }, [36, 45, 60].map(function (w) { return h("option", { value: w, text: w + " inches" }); })); width.value = "45";
-    mount(h("form", { class: "card", onsubmit: function (e) {
+    mount(pageHead("Add a customer", "You'll get a link to send them. They take two photos and enter their height."), h("form", { class: "card form-card", onsubmit: function (e) {
       e.preventDefault(); err.textContent = "";
       api("POST", "/v1/orders", { customer_name: name.value, phone: phone.value, style_id: st.value || null, fabric_width_in: Number(width.value) })
         .then(function (o) { showOrder(o.id); }).catch(function (x) { err.textContent = x.message; });
-    } }, h("h1", { text: "New customer" }), h("label", { for: "cname", text: "Name" }), name, h("label", { for: "cphone", text: "Phone (optional)" }), phone,
+    } }, h("label", { for: "cname", text: "Customer name" }), name, h("label", { for: "cphone", text: "Phone (optional)" }), phone,
       h("div", { class: "row" }, h("div", null, h("label", { for: "style", text: "Style" }), st), h("div", null, h("label", { for: "cwidth", text: "Fabric width" }), width)),
-      err, h("div", { class: "actions" }, h("button", { type: "submit", text: "Create and get link" }), h("button", { type: "button", class: "ghost", text: "Cancel", onclick: showList })))); name.focus();
+      err, h("div", { class: "actions" }, h("button", { type: "submit", text: "Create and get the link" }), h("button", { type: "button", class: "ghost", text: "Cancel", onclick: showList })))); name.focus();
   }
 
   // ---- order detail ----
   function showOrder(id) {
-    stopTimer(); nav.hidden = false;
+    stopTimer(); signedIn(true); setActive("orders");
     api("GET", "/v1/orders/" + id).then(function (o) { renderOrder(o); }).catch(function (e) { if (e.message !== "login") { mount(h("p", { class: "error", text: e.message }), h("button", { class: "ghost", text: "Back", onclick: showList })); } });
   }
 
   function renderOrder(o) {
     var out = [];
-    out.push(h("div", { class: "row", style: "align-items:center" },
+    out.push(h("button", { class: "back link-dark", text: "All orders", onclick: showList }));
+    out.push(h("div", { class: "page-head" },
       h("div", null, h("h1", { text: o.customer.name }), h("div", { class: "meta" }, h("span", { text: o.customer.phone || "No phone" }), h("span", { text: (o.measured_at ? "Measured " + fmtDate(o.measured_at) : "Created " + fmtDate(o.created_at)) }))),
-      h("div", { style: "text-align:right" }, o.can_repeat ? h("button", { id: "repeat-btn", text: "New order for " + o.customer.name.split(" ")[0], onclick: function () {
+      o.can_repeat ? h("div", { class: "page-actions" }, h("button", { id: "repeat-btn", class: "ghost", text: "New order for " + o.customer.name.split(" ")[0], onclick: function () {
         api("POST", "/v1/orders/" + o.id + "/repeat", {}).then(renderOrder).catch(function (e) { alert(e.message); });
-      } }) : null, " ", h("button", { class: "ghost", text: "All orders", onclick: showList }))));
+      } })) : null));
     if (o.carried_from) out.push(h("div", { class: "tapefirst", id: "carried-note" }, h("strong", { text: "Repeat order: numbers from " + fmtDate(o.carried_from.measured_at) + "." }),
       h("div", { class: "muted", text: "Nothing was re-measured. If " + o.customer.name.split(" ")[0] + "'s body may have changed, send the link below and ask for new photos; this page will then show what changed." })));
 
@@ -248,7 +339,7 @@
 
   // ---- accuracy: how far our estimates were from this tailor's tape ----
   function showAccuracy() {
-    stopTimer(); nav.hidden = false;
+    stopTimer(); signedIn(true); setActive("accuracy");
     api("GET", "/v1/accuracy").then(function (a) {
       var rows = a.measurements.map(function (m) {
         var max = Math.max.apply(null, m.series_cm.concat([1]));
@@ -258,7 +349,7 @@
           h("td", { text: m.mae_cm + " cm" }), h("td", { text: (m.bias_cm > 0 ? "+" : "") + m.bias_cm + " cm" }), h("td", { class: m.recent_mae_cm !== null && m.recent_mae_cm < m.first_mae_cm ? "good" : "", text: trend }),
           h("td", { text: m.offset_cm ? (m.offset_cm > 0 ? "+" : "") + m.offset_cm + " cm applied" : "not yet" }), h("td", null, spark));
       });
-      mount(h("div", { class: "row", style: "align-items:center" }, h("h1", { text: "Accuracy" }), h("div", { style: "text-align:right" }, h("button", { class: "ghost", text: "All orders", onclick: showList }))),
+      mount(pageHead("Accuracy", "How far our estimates were from your tape, per measurement."),
         h("div", { class: "card" }, h("p", { class: "muted", id: "acc-intro", text: a.orders ? "Based on " + a.orders + " order" + (a.orders === 1 ? "" : "s") + " where you entered a tape value. Gap = how far our estimate was from your tape. Bias is positive when we read too big."
             : "No tape values yet. Open a measured order, type what your tape says (or press \"Tape agrees\"), and this page fills in." }),
           a.measurements.length ? h("table", null, h("thead", null, h("tr", null, ["Measurement", "Checked", "Average gap", "Bias", "First → latest orders", "Learned offset", "Gap per order"].map(function (t) { return h("th", { text: t }); }))), h("tbody", null, rows)) : null,
@@ -268,12 +359,14 @@
 
   document.getElementById("acc-btn").addEventListener("click", showAccuracy);
   document.getElementById("home-btn").addEventListener("click", showList);
-  document.getElementById("logout-btn").addEventListener("click", function () { api("POST", "/v1/auth/logout").then(function () { showLogin(); }); });
+  document.getElementById("settings-btn").addEventListener("click", showSettings);
+  document.getElementById("logout-btn").addEventListener("click", function () { api("POST", "/v1/auth/logout").then(function () { showAuth("login"); }); });
 
   function start() {
-    return fetch("/v1/styles").then(function (r) { return r.json(); }).then(function (s) { styles = s; return api("GET", "/v1/auth/me"); }).then(function (me) {
-      if (!me.configured) return mount(h("div", { class: "card" }, h("h1", { text: "Dashboard not set up" }), h("p", { text: "Set TAILOR_USERNAME and TAILOR_PASSWORD on the server, then restart it." })));
-      if (me.logged_in) showList(); else showLogin();
+    return fetch("/v1/styles").then(function (r) { return r.json(); }).then(function (s) { styles = s; return api("GET", "/v1/auth/me"); }).then(function (m) {
+      showAuth.signupAllowed = m.signup_allowed;
+      if (m.logged_in) { me = m.tailor; fillAccount(); showList(); }
+      else showAuth(location.hash === "#signup" ? "signup" : "login");
     });
   }
   start();

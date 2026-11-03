@@ -41,7 +41,7 @@ def anon(env):
 
 @pytest.fixture
 def tailor(anon):
-    assert anon.post("/v1/auth/login", json={"username": "ada", "password": "correct horse"}).status_code == 200
+    assert anon.post("/v1/auth/login", json={"email": "ada", "password": "correct horse"}).status_code == 200
     return anon
 
 
@@ -67,16 +67,16 @@ def measure(c, order, keep=False, monkeypatch=None, blurred=True):
 
 # ---------------- login ----------------
 
-def test_dashboard_is_off_without_credentials(env, monkeypatch):
+def test_without_the_env_account_nobody_can_log_in_until_they_sign_up(env, monkeypatch):
     monkeypatch.delenv("TAILOR_PASSWORD")
     c = TestClient(app)
-    assert c.post("/v1/auth/login", json={"username": "ada", "password": "x"}).status_code == 503
-    assert c.get("/v1/orders").status_code == 503
-    assert c.get("/v1/auth/me").json() == {"logged_in": False, "configured": False}
+    assert c.post("/v1/auth/login", json={"email": "ada", "password": "x"}).status_code == 401
+    assert c.get("/v1/orders").status_code == 401
+    assert c.get("/v1/auth/me").json() == {"logged_in": False, "tailor": None, "signup_allowed": True}
 
 
 def test_login_logout_and_cookie_flags(anon):
-    r = anon.post("/v1/auth/login", json={"username": "ada", "password": "correct horse"})
+    r = anon.post("/v1/auth/login", json={"email": "ada", "password": "correct horse"})
     assert r.status_code == 200 and "httponly" in r.headers["set-cookie"].lower() and "samesite=lax" in r.headers["set-cookie"].lower()
     assert anon.get("/v1/auth/me").json()["logged_in"] is True
     anon.post("/v1/auth/logout")
@@ -86,8 +86,8 @@ def test_login_logout_and_cookie_flags(anon):
 
 def test_wrong_password_and_lockout(anon):
     for _ in range(5):
-        assert anon.post("/v1/auth/login", json={"username": "ada", "password": "nope"}).status_code == 401
-    assert anon.post("/v1/auth/login", json={"username": "ada", "password": "correct horse"}).status_code == 429
+        assert anon.post("/v1/auth/login", json={"email": "ada", "password": "nope"}).status_code == 401
+    assert anon.post("/v1/auth/login", json={"email": "ada", "password": "correct horse"}).status_code == 429
 
 
 @pytest.mark.parametrize("method,path", [

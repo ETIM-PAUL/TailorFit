@@ -17,32 +17,35 @@ MAX_PLAUSIBLE = 20.0  # a gap bigger than this is probably a typo or the wrong m
 MAX_OFFSET = 6.0      # never shift a number by more than this on the strength of a handful of orders
 
 
-def _rows() -> list[dict]:
+def _rows(tailor_id: int) -> list[dict]:
     return [{"person": r["order_id"], "set": 0, "name": r["name"], "predicted_cm": r["raw_cm"], "tape_cm": r["tape_cm"], "label": r["label"]}
-            for r in store.list_tape() if abs(r["raw_cm"] - r["tape_cm"]) <= MAX_PLAUSIBLE]
+            for r in store.list_tape(tailor_id) if abs(r["raw_cm"] - r["tape_cm"]) <= MAX_PLAUSIBLE]
 
 
-def offsets() -> dict[str, float]:
-    """cm to add to a fresh estimate, per measurement. Empty until the tailor has enough orders."""
-    proposed = confidence.propose_corrections(_rows(), min_n=MIN_ORDERS, min_people=MIN_ORDERS)
+def offsets(tailor_id: int | None) -> dict[str, float]:
+    """cm to add to a fresh estimate, per measurement, from this tailor's tape. Empty until they have enough orders."""
+    if tailor_id is None:
+        return {}
+    proposed = confidence.propose_corrections(_rows(tailor_id), min_n=MIN_ORDERS, min_people=MIN_ORDERS)
     return {k: max(-MAX_OFFSET, min(MAX_OFFSET, v)) for k, v in proposed.items()}
 
 
-def apply(items: list[dict]) -> tuple[list[dict], dict[str, float]]:
-    """Add the learned offsets to a fresh sheet. Returns the new items and the offsets actually applied."""
-    off = offsets()
+def apply(items: list[dict], tailor_id: int | None) -> tuple[list[dict], dict[str, float]]:
+    """Add the tailor's learned offsets to a fresh sheet. Returns the new items and the offsets actually applied."""
+    off = offsets(tailor_id)
     out = confidence.apply_corrections(items, off)
     for m in out:
         m["reason"] = m["reason"].replace("using pilot data", "using your earlier tape values") if m["name"] in off and "using pilot data" in m["reason"] else m["reason"]
     return out, {n: o for n, o in off.items() if any(m["name"] == n for m in items)}
 
 
-def accuracy() -> dict:
+def accuracy(tailor_id: int) -> dict:
     """Per measurement: how many tape comparisons, the average gap, and the gap for the first vs latest orders."""
     by_name: dict[str, list[dict]] = {}
-    for r in store.list_tape():
+    tape = store.list_tape(tailor_id)
+    for r in tape:
         by_name.setdefault(r["name"], []).append(r)
-    live = offsets()
+    live = offsets(tailor_id)
     out = []
     for name, rows in by_name.items():
         # error the tailor would have seen: our estimate as delivered (with any learned offset) vs the tape
@@ -57,5 +60,5 @@ def accuracy() -> dict:
             entry["first_mae_cm"], entry["recent_mae_cm"] = round(statistics.mean(errs[:half]), 1), round(statistics.mean(errs[-half:]), 1)
         out.append(entry)
     out.sort(key=lambda e: -e["n"])
-    orders = len({r["order_id"] for r in store.list_tape()})
+    orders = len({r["order_id"] for r in tape})
     return {"orders": orders, "min_orders": MIN_ORDERS, "measurements": out}

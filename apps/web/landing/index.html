@@ -4,67 +4,164 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#22306b">
-  <title>TailorFit: measurements from two photos</title>
-  <meta name="description" content="TailorFit turns two phone photos and a height into a tailor's measurement sheet, shows the outfit in your own fabric, and works out how much cloth to buy.">
+  <title>TailorFit: measure your customers from two photos</title>
+  <meta name="description" content="TailorFit turns two phone photos and a height into a tailor's measurement sheet, marks how sure it is of every number, and works out the yardage and cutting sheet.">
   <link rel="icon" href="/shared/icon.svg" type="image/svg+xml">
   <link rel="preload" href="/shared/fonts/atkinson-hyperlegible-next.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/shared/base.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="top">
-  <a class="brand" href="/">TailorFit</a>
-  <a class="login" href="/dashboard/">Tailor login</a>
+  <div class="wrap top-in">
+    <a class="brand" href="/">TailorFit</a>
+    <nav class="links" aria-label="Page">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#accuracy">Accuracy</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="top-cta">
+      <a class="login" href="/dashboard/">Log in</a>
+      <a class="btn" href="/dashboard/#signup">Get started</a>
+    </div>
+  </div>
 </header>
 
-<main>
-  <section class="hero">
-    <h1>Measurements from two photos.</h1>
-    <p class="lede">Your customer sends a front photo, a side photo and their height. You get twelve measurements in about a minute, each one marked with how sure we are, so you know which to check with your tape.</p>
+<main id="main">
+  <section class="hero wrap">
+    <div class="hero-copy">
+      <h1>Measure your customers from two photos.</h1>
+      <p class="lede">Send a link. Your customer takes a front and a side photo on their phone. You get twelve measurements in about a minute, each one marked with how sure we are, plus the yardage and a cutting sheet.</p>
+      <div class="cta-row">
+        <a class="btn big" href="/dashboard/#signup">Create your account</a>
+        <a class="btn ghost big" href="/capture/">Try the photo steps</a>
+      </div>
+      <p class="fine">No app to install. Customers use the link in their phone's browser.</p>
+    </div>
+    <figure class="mock" aria-label="Example of a TailorFit order: chest and waist are marked to check with a tape.">
+      <div class="mock-head"><strong>Ngozi Eze</strong><span>Senator</span></div>
+      <p class="mock-flag">Tape these first: Bust chest, Waist</p>
+      <table class="mock-table">
+        <tbody>
+          <tr class="flag"><th scope="row">Bust chest</th><td>96.0</td><td><span class="chip low">low</span></td></tr>
+          <tr class="flag"><th scope="row">Waist</th><td>82.0</td><td><span class="chip medium">medium</span></td></tr>
+          <tr><th scope="row">Hip</th><td>101.0</td><td><span class="chip medium">medium</span></td></tr>
+          <tr><th scope="row">Sleeve length</th><td>61.0</td><td><span class="chip medium">medium</span></td></tr>
+          <tr><th scope="row">Trouser length</th><td>103.0</td><td><span class="chip medium">medium</span></td></tr>
+        </tbody>
+      </table>
+      <div class="mock-foot"><span class="mock-yards">5¼ yards</span><span>of 45-inch fabric</span></div>
+    </figure>
   </section>
 
-  <figure class="hero-tape" aria-label="Example on a tape measure: bust 92 centimetres, high confidence; waist 76, check with a tape; hip 98, high confidence.">
-    <div class="tape tape-hero" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-    <span class="pin up low" style="--at: 76" aria-hidden="true"><b>76.0</b> Waist: tape this</span>
-    <span class="pin down" style="--at: 92" aria-hidden="true"><b>92.0</b> Bust</span>
-    <span class="pin up" style="--at: 98" aria-hidden="true"><b>98.0</b> Hip</span>
+  <figure class="hero-tape" aria-hidden="true">
+    <div class="tape tape-hero"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <span class="pin up low" style="--at: 82"><b>82.0</b> Waist: tape this</span>
+    <span class="pin down" style="--at: 96"><b>96.0</b> Bust</span>
+    <span class="pin up" style="--at: 101"><b>101.0</b> Hip</span>
   </figure>
 
-  <section class="roles">
-    <article class="role tailor">
-      <h2>For tailors</h2>
-      <p>Add a customer, send them a link, then check their numbers, see the outfit in their fabric, and print a cutting sheet with the yardage.</p>
-      <a class="btn" href="/dashboard/">Log in to the dashboard</a>
-    </article>
-    <article class="role customer">
-      <h2>Got a link from your tailor?</h2>
-      <p>Open it on your phone. You'll enter your height and take two photos, and your tailor gets your measurements.</p>
-      <a class="btn ghost" href="/capture/">Try the photo steps</a>
-      <p class="small">The demo isn't linked to a tailor and saves nothing.</p>
-    </article>
+  <section id="features" class="section wrap">
+    <h2 class="section-title">Everything between the photo and the cut</h2>
+    <p class="section-lede">Built for tailors who measure customers they can't always see in person.</p>
+    <div class="features">
+      <article class="feature">
+        <h3>Two photos, twelve measurements</h3>
+        <p>Chest, waist, hip, neck, arm, thigh, shoulder, sleeve, top, trouser, inseam and back length, in cm and inches.</p>
+      </article>
+      <article class="feature">
+        <h3>Honest about every number</h3>
+        <p>Each measurement is marked high, medium or low, and the order page lists the two or three to check with your tape first.</p>
+      </article>
+      <article class="feature">
+        <h3>Gets more accurate as you use it</h3>
+        <p>Type in what your tape says. TailorFit tracks how far off it was for your customers and corrects steady errors on new orders.</p>
+      </article>
+      <article class="feature">
+        <h3>Yardage and cutting sheet</h3>
+        <p>Finished garment sizes with the ease for each style, fabric needed for 36, 45 and 60-inch cloth, and a sheet to print.</p>
+      </article>
+      <article class="feature">
+        <h3>See it in their fabric</h3>
+        <p>Your customer adds a photo of their cloth and sees a preview of the style in it before you cut.</p>
+      </article>
+      <article class="feature">
+        <h3>Returning customers in seconds</h3>
+        <p>Start a new order from their last measurements, and see what changed when they send new photos.</p>
+      </article>
+    </div>
   </section>
 
-  <section class="how">
-    <h2>How it works</h2>
+  <section id="how" class="section wrap">
+    <h2 class="section-title">How it works</h2>
     <ol class="steps">
-      <li><strong>Your tailor sends you a link.</strong> Open it on your phone.</li>
-      <li><strong>Take two photos.</strong> Stand straight in fitted clothes, once facing the phone and once side on. Add a photo of your fabric to see the outfit.</li>
-      <li><strong>Your tailor gets your measurements.</strong> Every number is marked high, medium or low, and your tailor checks the uncertain ones before cutting.</li>
+      <li><h3>Add your customer</h3><p>Their name, the style and the fabric width. You get a private link to send them on WhatsApp.</p></li>
+      <li><h3>They take two photos</h3><p>Front and side, standing straight in fitted clothes. The camera tells them when their whole body is in view.</p></li>
+      <li><h3>You check and cut</h3><p>Tape the numbers marked to check, adjust the ease, and print the cutting sheet with the yardage.</p></li>
     </ol>
   </section>
 
-  <section class="privacy">
-    <h2>Your photos</h2>
-    <ul>
-      <li>Your face is blurred automatically.</li>
-      <li>Photos are deleted right after processing, unless you choose to let your tailor keep them.</li>
-      <li>You can ask for your photos to be deleted at any time.</li>
+  <section id="accuracy" class="section wrap accuracy">
+    <div class="acc-copy">
+      <h2 class="section-title">How accurate is it?</h2>
+      <p>We tested the measuring step on 150 people from BodyM, a public benchmark of body scans. On average our numbers were this far from the scan:</p>
+      <p class="fine">That test used clean body outlines. Real phone photos, with clothes and room light, will do worse. That's why every number carries a confidence mark, and why TailorFit tells you which ones to tape.</p>
+    </div>
+    <table class="acc-table">
+      <thead><tr><th scope="col">Measurement</th><th scope="col">Average error</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Arm round</th><td>2.6 cm</td></tr>
+        <tr><th scope="row">Thigh</th><td>5.7 cm</td></tr>
+        <tr><th scope="row">Waist</th><td>6.0 cm</td></tr>
+        <tr><th scope="row">Hip</th><td>6.2 cm</td></tr>
+        <tr><th scope="row">Shoulder width</th><td>6.2 cm</td></tr>
+        <tr><th scope="row">Bust / chest</th><td>6.6 cm</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section wrap privacy">
+    <h2 class="section-title">Your customers' photos stay private</h2>
+    <ul class="checks">
+      <li>Faces are blurred automatically.</li>
+      <li>Photos are deleted right after processing, unless the customer chooses to let you keep them.</li>
+      <li>Customers can delete their photos from their own link at any time.</li>
+      <li>Each tailor sees only their own customers.</li>
     </ul>
+  </section>
+
+  <section id="faq" class="section wrap faq">
+    <h2 class="section-title">Questions</h2>
+    <details><summary>Does my customer need to install anything?</summary><p>No. They open the link you send in their phone's browser, take two photos and enter their height.</p></details>
+    <details><summary>Can I cut straight from these numbers?</summary><p>Not without checking. Use the confidence marks: tape the numbers marked low or listed under "Tape these first", and treat the rest as a close starting point.</p></details>
+    <details><summary>What do my customers need to do for good photos?</summary><p>Stand straight in fitted clothes, arms slightly away from the body, with the phone upright at about waist height. The camera screen guides them and says when their whole body is in view.</p></details>
+    <details><summary>Which styles does it support?</summary><p>Senator, kaftan, gown, and iro and buba, each with its own ease and fabric calculation that you can adjust per order.</p></details>
+    <details><summary>What happens to the photos?</summary><p>They're used to work out the measurements and then deleted, unless the customer ticks the box to let you keep face-blurred copies.</p></details>
+  </section>
+
+  <section class="final">
+    <div class="wrap final-in">
+      <h2>Send your first customer a link today.</h2>
+      <a class="btn big tape-btn" href="/dashboard/#signup">Create your account</a>
+    </div>
   </section>
 </main>
 
-<footer>
-  <p>Measurements are estimates made from photos. Your tailor confirms them before cutting.</p>
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div>
+      <a class="brand" href="/">TailorFit</a>
+      <p class="fine">Measurements are estimates made from photos. Your tailor confirms them before cutting.</p>
+    </div>
+    <nav aria-label="Footer">
+      <a href="/dashboard/">Log in</a>
+      <a href="/dashboard/#signup">Create an account</a>
+      <a href="/capture/">Try the photo steps</a>
+    </nav>
+  </div>
+  <p class="wrap credit">Accuracy figures use the BodyM dataset by Amazon (CC BY-NC 4.0), on silhouettes only.</p>
 </footer>
 </body>
 </html>

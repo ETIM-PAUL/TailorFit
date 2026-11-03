@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TailorFit · Tailor dashboard</title>
+  <title>TailorFit dashboard</title>
   <link rel="icon" href="/shared/icon.svg" type="image/svg+xml">
   <meta name="theme-color" content="#22306b">
   <link rel="preload" href="/shared/fonts/atkinson-hyperlegible-next.woff2" as="font" type="font/woff2" crossorigin>
@@ -11,12 +11,22 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="top">
-  <strong class="brand">TailorFit</strong>
-  <nav id="nav" hidden><button class="link" id="home-btn">Orders</button><button class="link" id="acc-btn">Accuracy</button><button class="link" id="logout-btn">Log out</button></nav>
-</header>
-<div class="tape tape-edge" aria-hidden="true"></div>
-<main id="app" aria-live="polite"></main>
+<div class="shell">
+  <aside class="side" aria-label="Main">
+    <a class="brand" href="/">TailorFit</a>
+    <nav>
+      <button class="nav-item" id="home-btn" data-view="orders">Orders</button>
+      <button class="nav-item" id="acc-btn" data-view="accuracy">Accuracy</button>
+      <button class="nav-item" id="settings-btn" data-view="settings">Settings</button>
+    </nav>
+    <div class="account">
+      <strong id="acct-shop"></strong>
+      <span id="acct-name"></span>
+      <button class="link" id="logout-btn">Log out</button>
+    </div>
+  </aside>
+  <main id="app" aria-live="polite"></main>
+</div>
 <script src="app.js"></script>
 </body>
 </html>
