@@ -74,6 +74,21 @@ def build_pdf(view: dict, preview_jpeg: bytes | None = None) -> bytes:
     if any_edit:
         story.append(_p("Yellow rows were edited by the tailor; the original estimate is shown in the notes.", small))
 
+    fin = view.get("finished")
+    if fin:
+        rows = [["Garment part", "in", "cm", "How", "Confidence"]]
+        for r in fin:
+            rows.append([_p(r["part"], body), f"{r['inches']:.1f}", f"{r['cm']:.1f}", _p(r["how"], small), _p(r["confidence_label"], body)])
+        ft = Table(rows, colWidths=[34 * mm, 15 * mm, 17 * mm, 84 * mm, 26 * mm], repeatRows=1)
+        fts = [("BACKGROUND", (0, 0), (-1, 0), GREEN), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white), ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+               ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#bbbbbb")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+               ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f6f4ef")])]
+        fts += [("BACKGROUND", (4, i), (4, i), colors.HexColor("#f9d6d2")) for i, r in enumerate(fin, start=1) if r["confidence_label"] == "low"]
+        ft.setStyle(TableStyle(fts))
+        story.append(KeepTogether([_p(f"Finished garment ({style.get('name')})", h2), ft,
+                                   _p("Finished sizes are the body measurement plus the ease for this style (editable on the dashboard). "
+                                      "Red cells depend on a low-confidence body measurement: tape it first.", small)]))
+
     y = view.get("yardage")
     story.append(_p("Fabric", h2))
     if y and not y.get("error"):

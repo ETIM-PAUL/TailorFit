@@ -1,2 +1,2 @@
-pillow>=10
+pillow>=13
 pytest>=8

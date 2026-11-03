@@ -22,9 +22,7 @@
 
 ## Known gaps
 
-- **Pillow 12.3.0 has 14 published advisories, fixed in 13.0.0**, which needs Python 3.11 or newer (this project and CI run 3.10, which
-  is also near end of life). The format restriction above removes most of the exposure, but upgrade Python and Pillow before
-  production. `pip`, `setuptools` and `filelock` also have advisories; they are build or transitive tools, not part of the running app.
+- **Python 3.12 and Pillow 13.0.0** (the 12.3.0 advisories are fixed in 13). `pip`, `setuptools` and `filelock` may still show advisories; they are build or transitive tools, not part of the running app. Re-run `pip-audit` before deploying.
 - One shared tailor login, no password change, sessions in memory (a restart logs everyone out), login lockout is per address in memory.
 - Rate limits are in memory and per address: they cap the AI bill, they are not a defence against a determined flood.
 - A customer link never expires, and access logs record it (it is in the address). Anyone holding the link can upload to the order

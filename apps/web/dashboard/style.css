@@ -29,3 +29,4 @@ td input { width: 90px; padding: 5px 6px; } td.edited input { background: #fff3c
 tr.tape-now td:first-child { border-left: 4px solid #d4a72c; }
 .spark { display: flex; gap: 3px; align-items: flex-end; height: 36px; } .spark i { display: block; width: 10px; background: #1f3a34; min-height: 2px; }
 .good { color: #1a6b32; font-weight: 700; }
+.badge.repeat { background: #e0e7ff; color: #2b3a8a; } td.up { color: #9b1c12; font-weight: 700; } td.down { color: #1a6b32; font-weight: 700; }

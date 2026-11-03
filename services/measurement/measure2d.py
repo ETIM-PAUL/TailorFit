@@ -31,6 +31,11 @@ SLEEVE_PROPORTION = 0.33
 INSEAM_PROPORTION = 0.45
 ARM_TO_BUST = 0.31
 THIGH_ROW_OFFSET = 0.06  # rows (share of height) below the crotch where the thigh is measured
+# Chest: with the arms apart, the fullest part of the chest is the widest torso within CHEST_WINDOW (share of height) below
+# the armpit; the front view's own armpit row is too high when the arms are held out. Side depth is the deepest point
+# within CHEST_DEPTH_BAND of those rows. Chosen on BodyM Test-A, judged on Test-B (see eval/README).
+CHEST_WINDOW = 0.06
+CHEST_DEPTH_BAND = 0.02
 ARM_ROW_OFFSET = 0.01  # rows (as a share of height) below where the arms first separate, where the arm is measured
 
 
@@ -38,7 +43,7 @@ ARM_ROW_OFFSET = 0.01  # rows (as a share of height) below where the arms first 
 # masks, no clothing, no phone camera), so real photos will do worse. Confidence labels are capped by it: a number
 # we have measured to be 6 cm off on average cannot honestly be called "high". Measurements with no benchmark
 # counterpart are capped at medium. Update from eval/results/accuracy.md when the pilot data is in.
-TYPICAL_ERROR_CM = {"bust_chest": 10.0, "waist": 6.0, "hip": 6.5, "shoulder_width": 6.5, "arm_round": 3.0, "thigh": 6.0}
+TYPICAL_ERROR_CM = {"bust_chest": 6.6, "waist": 6.0, "hip": 6.5, "shoulder_width": 6.5, "arm_round": 3.0, "thigh": 6.0}
 HIGH_UNDER_CM, MEDIUM_UNDER_CM = 2.5, 6.0
 
 
@@ -69,7 +74,7 @@ def ellipse_circumference(width_cm: float, depth_cm: float) -> float:
 # A real torso is squarer than an ellipse: it is wide and flat across the chest, waist and hip. A superellipse
 # |x/a|^n + |y/b|^n = 1 (n = 2 is an ellipse, larger n is squarer) captures that. Exponents were chosen on the
 # BodyM Test-A silhouettes only and then judged on Test-B (see eval/README). Measurements not listed stay elliptical.
-SHAPE_EXPONENT = {"bust_chest": 2.6, "waist": 2.6, "hip": 2.6}
+SHAPE_EXPONENT = {"bust_chest": 3.0, "waist": 2.6, "hip": 2.6}
 
 
 def superellipse_circumference(width_cm: float, depth_cm: float, n: float) -> float:
@@ -217,11 +222,15 @@ def measure_from_masks(front, side, height_cm: float, mask_quality: tuple[float,
     arm_y = sep_y + int(ARM_ROW_OFFSET * F.h_px) if arms_apart else None
 
     v: dict[str, _Val] = {}
-    chest_y = _row_in(S, F, bust_y)
-    chest_w = F.cwidth(chest_y)
-    if arms_apart and not arms_open(chest_y) and chest_y < arm_y:
-        chest_w = F.cwidth(arm_y)  # arms merged at the bust row: use the torso just below the armpit instead
-    v["bust_chest"] = _circ(chest_w, S.depth(bust_y), "bust_chest")
+    if arms_apart:
+        sep_f = (F.bottom - sep_y) / (F.h_px - 1)
+        steps = [round(i * 0.01, 2) for i in range(int(round(CHEST_WINDOW / 0.01)) + 1)]
+        chest_w = max(F.cwidth(F.y(sep_f - k)) for k in steps)
+        band = [-CHEST_DEPTH_BAND, -CHEST_DEPTH_BAND / 2, 0.0, CHEST_DEPTH_BAND / 2, CHEST_DEPTH_BAND]
+        chest_d = max(S.depth(S.y(sep_f - k + j)) for k in steps for j in band)
+    else:
+        chest_w, chest_d = F.cwidth(_row_in(S, F, bust_y)), S.depth(bust_y)
+    v["bust_chest"] = _circ(chest_w, chest_d, "bust_chest")
     v["waist"] = _circ(F.cwidth(waist_y), S.depth(_row_in(F, S, waist_y)), "waist")
     v["hip"] = _circ(F.cwidth(hip_y), S.depth(_row_in(F, S, hip_y)), "hip")
     v["neck"] = _circ(F.cwidth(neck_y), S.depth(_row_in(F, S, neck_y)), "neck")

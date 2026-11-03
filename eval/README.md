@@ -41,7 +41,7 @@ The engine was improved against BodyM **Test-A** (87 subjects; this is the set I
 
 | Measurement | Before (Test-B) | After (Test-B) | After (Test-A, tuned on) |
 | --- | --- | --- | --- |
-| Bust / chest | 14.0 (+10.1) | **10.1** (-9.7) | 3.9 (-2.7) |
+| Bust / chest | 14.0 (+10.1) | **6.6** (-4.9) | 3.8 (+0.5) |
 | Waist | 8.4 (-7.4) | **6.0** (-3.5) | 3.2 (-0.9) |
 | Hip | 6.7 (-3.3) | **6.2** (+1.4) | 4.1 (-0.9) |
 | Shoulder width | 6.2 (+6.0) | **6.2** (+6.0) | 5.8 (+1.7) |
@@ -52,15 +52,20 @@ Read it honestly:
 
 - The big first failure was geometric: when the arms touch the torso at chest height, the silhouette is one wide blob and the
   engine measured the arms as chest (+25 cm on Test-A). The fix finds where the arms first separate. Touching legs are now
-  measured as two legs. Chest, waist and hip use a squarer cross-section than an ellipse (exponent 2.6, chosen on Test-A).
-- Test-B is less controlled than Test-A and the gap shows. **Chest still reads about 10 cm small on Test-B.** Shoulder width
+  measured as two legs. Chest, waist and hip use a squarer cross-section than an ellipse (exponent 3.0 for chest, 2.6 for waist and
+  hip, chosen on Test-A).
+- Chest got a second fix: with the arms held out, the "arms separate" row sits above the fullest part of the chest, so chest
+  now takes the widest torso in a window of 6% of height below that row (and the deepest side view around it). The window
+  was chosen on Test-A, where it changed nothing (3.9 to 3.8 cm), and then judged on Test-B: **10.1 to 6.6 cm**. When the
+  arms hang against the torso the window sits low, so chest can read a little small there.
+- Test-B is less controlled than Test-A and the gap shows. **Chest still reads about 5 cm small on Test-B**, so it stays labelled low. Shoulder width
   did not improve (it reads the deltoid line, not the shoulder bone). Thigh has large scatter between people.
 - Six of the twelve measurements have a BodyM counterpart; neck, sleeve, back, top, trouser length and inseam have no benchmark
   figure at all. Definitions differ slightly (BodyM girths come from 3D scans), so part of any gap is definition.
 - This benchmark does not test SAM, clothing, the photo quality gate or phone cameras. Real photos will do worse.
 - Confidence labels are now capped by these measured errors (`TYPICAL_ERROR_CM` in `services/measurement/measure2d.py`),
   so nothing is called "high" while its typical error is over 2.5 cm. On both sets the labels line up with the errors:
-  medium averages 3.6 / 4.5 cm off and low 5.5 / 7.5 cm (Test-A / Test-B).
+  medium averages 3.6 / 4.5 cm off and low 5.5 / 6.4 cm (Test-A / Test-B).
 
 ## Load test
 

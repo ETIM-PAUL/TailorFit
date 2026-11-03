@@ -59,6 +59,7 @@
         body.textContent = ""; empty.hidden = orders.length > 0;
         orders.forEach(function (o) {
           var badges = h("span", null, h("span", { class: "badge " + o.status, text: o.status === "new" ? "Waiting for photos" : "Measured" }));
+          if (o.carried_from) badges.appendChild(h("span", { class: "badge repeat", text: " Repeat order" }));
           if (o.low_confidence) badges.appendChild(h("span", { class: "badge warn", text: " " + o.low_confidence + " to check" }));
           body.appendChild(h("tr", { class: "click", tabindex: 0, onclick: function () { showOrder(o.id); } },
             h("td", null, h("strong", { text: o.customer.name }), h("div", { class: "muted", text: o.customer.phone || "" })),
@@ -103,20 +104,25 @@
     var out = [];
     out.push(h("div", { class: "row", style: "align-items:center" },
       h("div", null, h("h1", { text: o.customer.name }), h("div", { class: "muted", text: (o.customer.phone || "No phone") + " · " + (o.measured_at ? "measured " + fmtDate(o.measured_at) : "created " + fmtDate(o.created_at)) })),
-      h("div", { style: "text-align:right" }, h("button", { class: "ghost", text: "← All orders", onclick: showList }))));
+      h("div", { style: "text-align:right" }, o.can_repeat ? h("button", { id: "repeat-btn", text: "New order for " + o.customer.name.split(" ")[0], onclick: function () {
+        api("POST", "/v1/orders/" + o.id + "/repeat", {}).then(renderOrder).catch(function (e) { alert(e.message); });
+      } }) : null, " ", h("button", { class: "ghost", text: "← All orders", onclick: showList }))));
+    if (o.carried_from) out.push(h("div", { class: "tapefirst", id: "carried-note" }, h("strong", { text: "Repeat order: numbers from " + fmtDate(o.carried_from.measured_at) + "." }),
+      h("div", { class: "muted", text: "Nothing was re-measured. If " + o.customer.name.split(" ")[0] + "'s body may have changed, send the link below and ask for new photos; this page will then show what changed." })));
 
     var link = location.origin + o.capture_url;
     var linkInput = h("input", { id: "caplink", readonly: true, value: link });
     var copied = h("span", { class: "muted", id: "copied" });
-    out.push(h("div", { class: "card" }, h("h2", { text: o.status === "new" ? "Send this link to " + o.customer.name.split(" ")[0] : "Customer link" }),
+    out.push(h("div", { class: "card" }, h("h2", { text: o.status === "new" ? "Send this link to " + o.customer.name.split(" ")[0] : o.carried_from ? "Ask for new photos (optional)" : "Customer link" }),
       h("div", { class: "linkbox" }, linkInput, h("button", { id: "copy-btn", text: "Copy", onclick: function () { linkInput.select(); (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(function () { copied.textContent = "Copied"; }, function () { copied.textContent = "Press copy on the selected text"; }); } }), copied),
       whatsappRow(o, link),
       o.status === "new" ? h("p", { class: "muted", text: "They open it on their phone, take two photos and enter their height. This page updates when they finish." }) : null));
 
     if (o.status === "new") { out.push(h("p", { class: "muted", id: "waiting", text: "Waiting for photos…" })); timer = setInterval(function () { api("GET", "/v1/orders/" + o.id).then(function (n) { if (n.status !== "new") { stopTimer(); renderOrder(n); } }).catch(function () {}); }, 5000); }
-    else out.push(measurementsCard(o));
+    else { out.push(measurementsCard(o)); if (o.changes && o.changes.items.length) out.push(changesCard(o)); }
 
     out.push(styleCard(o));
+    if (o.finished && o.finished.length) out.push(finishedCard(o));
     if (o.has_preview) out.push(h("div", { class: "card" }, h("h2", { text: "Style preview" }), h("img", { class: "preview", id: "preview-img", alt: "Style preview", src: "/v1/orders/" + o.id + "/preview.jpg?t=" + Date.now() }), h("p", { class: "muted", text: "Preview, not the final garment." })));
     out.push(notesCard(o), privacyCard(o));
     mount.apply(null, out);
@@ -157,7 +163,7 @@
         h("td", { class: m.edited ? "edited" : "" }, input), h("td", { class: "hide-sm", text: m.value_in.toFixed(1) }),
         h("td", null, h("span", { class: "conf-" + m.confidence_label, text: m.confidence_label }), h("div", { class: "why", text: m.reason })),
         h("td", null, m.edited ? h("button", { class: "ghost", style: "padding:4px 8px;font-size:.8rem", text: "Undo edit", onclick: function () { var e = {}; e[m.name] = null; saveEdits(o.id, e); } }) : null)];
-      if (!m.edited) cells[5] = h("td", null, h("button", { class: "ghost", style: "padding:4px 8px;font-size:.8rem", "data-agree": m.name, text: "Tape agrees", onclick: function () { var e = {}; e[m.name] = m.original_cm; saveEdits(o.id, e); } }));
+      if (!m.edited && !o.carried_from) cells[5] = h("td", null, h("button", { class: "ghost", style: "padding:4px 8px;font-size:.8rem", "data-agree": m.name, text: "Tape agrees", onclick: function () { var e = {}; e[m.name] = m.original_cm; saveEdits(o.id, e); } }));
       body.appendChild(h("tr", { "data-row": m.name, class: tapeNow.indexOf(m.name) >= 0 ? "tape-now" : "" }, cells));
     });
     save.addEventListener("click", function () { saveEdits(o.id, dirty); });
@@ -165,10 +171,20 @@
       o.stub ? h("p", { class: "notice error", text: "Demo values: the measurement engine was not connected, so these numbers are not real." }) : null,
       tapeNow.length ? h("div", { class: "tapefirst", id: "tape-first" }, h("strong", { text: "Tape these first: " + tapeNow.map(pretty).join(", ") }),
         h("div", { class: "muted", text: "These are the numbers we are least sure of. The rest are likely close enough to start cutting." })) : null,
-      h("p", { class: "muted", text: "Type what your tape says, or press \"Tape agrees\" if our number is right. Your tape values are saved to track how accurate we are for you (see Accuracy), and they never change the original estimate." }),
+      o.carried_from ? h("p", { class: "muted", text: "Edit any value if you re-measured. Edits on a repeat order are not used to track accuracy, because we did not estimate these numbers for this order." }) : h("p", { class: "muted", text: "Type what your tape says, or press \"Tape agrees\" if our number is right. Your tape values are saved to track how accurate we are for you (see Accuracy), and they never change the original estimate." }),
       h("table", null, h("thead", null, h("tr", null, h("th", { text: "Measurement" }), h("th", { class: "hide-sm", text: "Original cm" }), h("th", { text: "cm" }), h("th", { class: "hide-sm", text: "in" }), h("th", { text: "Confidence" }), h("th"))), body),
       h("p", { class: "error", id: "edit-error", role: "alert" }), h("div", { class: "actions" }, save));
   }
+  function changesCard(o) {
+    var c = o.changes, rows = c.items.map(function (i) {
+      return h("tr", { "data-change": i.name }, h("td", null, h("strong", { text: pretty(i.name) })), h("td", { text: i.previous_cm.toFixed(1) + " cm" }), h("td", { text: i.current_cm.toFixed(1) + " cm" }),
+        h("td", { class: i.delta_cm > 0 ? "up" : "down", text: (i.delta_cm > 0 ? "+" : "") + i.delta_cm.toFixed(1) + " cm" }), h("td", { class: "muted", text: i.both_checked ? "both taped" : "estimates" }));
+    });
+    return h("div", { class: "card", id: "changes-card" }, h("h2", { text: "What changed since " + fmtDate(c.previous_date) }),
+      h("table", null, h("thead", null, h("tr", null, ["Measurement", "Before", "Now", "Change", "Based on"].map(function (t) { return h("th", { text: t }); }))), h("tbody", null, rows)),
+      h("p", { class: "muted", text: "Only changes bigger than the usual error are listed (about 1.5 cm if both were taped, otherwise 3 cm or more). Check these with a tape before cutting." }));
+  }
+
   function saveEdits(id, edits) {
     api("PUT", "/v1/orders/" + id + "/measurements", { edits: edits }).then(renderOrder).catch(function (e) { var el = document.getElementById("edit-error"); if (el) el.textContent = e.message; });
   }
@@ -178,6 +194,14 @@
     var A = o.allowances, fields = [["seam_in", "Seam (in)"], ["hem_in", "Hem (in)"], ["shrink_pct", "Shrinkage %"], ["extra_pct", "Extra %"], ["pattern_match_pct", "Print matching %"]];
     var inputs = {}; var allowRow = h("div", { class: "row" });
     fields.forEach(function (f) { inputs[f[0]] = h("input", { type: "number", step: "0.25", min: "0", id: "al-" + f[0], value: A[f[0]] }); allowRow.appendChild(h("div", null, h("label", { for: "al-" + f[0], text: f[1] }), inputs[f[0]])); });
+    var easeLabels = { chest: "Chest ease (in)", hip: "Trouser hip ease (in)", thigh: "Trouser thigh ease (in)" }, easeInputs = {}, easeRow = null;
+    if (o.ease) {
+      easeRow = h("div", { class: "row", id: "ease-row" });
+      Object.keys(o.ease.defaults).forEach(function (part) {
+        easeInputs[part] = h("input", { type: "number", step: "0.5", min: "0", id: "ease-" + part, value: o.ease.values[part] });
+        easeRow.appendChild(h("div", null, h("label", { for: "ease-" + part, text: easeLabels[part] }), easeInputs[part], h("div", { class: "muted", text: "style default " + o.ease.defaults[part] })));
+      });
+    }
     var err = h("p", { class: "error", id: "style-error", role: "alert" });
     var y = o.yardage, result = null;
     if (y && y.error) result = h("p", { class: "error", text: y.error });
@@ -186,12 +210,25 @@
     else result = h("p", { class: "muted", text: "Choose a style to see the yardage." });
     return h("div", { class: "card" }, h("h2", { text: "Style and fabric" }),
       h("div", { class: "row" }, h("div", null, h("label", { for: "style", text: "Style" }), st), h("div", null, h("label", { for: "fwidth", text: "Fabric width" }), width)),
-      h("details", null, h("summary", { text: "Allowances (you can change these)" }), allowRow),
+      easeRow ? h("div", null, h("h3", { text: "Ease: how loose the garment is" }), easeRow) : null,
+      h("details", null, h("summary", { text: "Fabric allowances (you can change these)" }), allowRow),
       h("div", { class: "actions" }, h("button", { id: "update-style", text: "Update", onclick: function () {
         var al = {}; fields.forEach(function (f) { al[f[0]] = Number(inputs[f[0]].value); });
+        // Only pin an ease value when it differs from the style's default, so a later style change picks up the new default.
+        Object.keys(easeInputs).forEach(function (part) { var v = Number(easeInputs[part].value); al[part + "_ease_in"] = v === o.ease.defaults[part] ? null : v; });
         api("PATCH", "/v1/orders/" + o.id, { style_id: st.value, fabric_width_in: Number(width.value), allowances: al }).then(renderOrder).catch(function (e) { err.textContent = e.message; });
       } })), err, result,
       o.measurements.length ? h("div", { class: "actions" }, h("a", { class: "btn", id: "pdf-link", target: "_blank", rel: "noopener", href: "/v1/orders/" + o.id + "/cutting-sheet.pdf", text: "Print cutting sheet (PDF)" })) : null);
+  }
+
+  function finishedCard(o) {
+    var rows = o.finished.map(function (r) {
+      return h("tr", { "data-part": r.part }, h("td", null, h("strong", { text: r.part })), h("td", { text: r.inches.toFixed(1) + " in" }), h("td", { class: "hide-sm", text: r.cm.toFixed(1) + " cm" }),
+        h("td", { class: "muted", text: r.how }), h("td", null, h("span", { class: "conf-" + r.confidence_label, text: r.confidence_label })));
+    });
+    return h("div", { class: "card", id: "finished-card" }, h("h2", { text: "Finished garment: " + o.style.name }),
+      h("table", null, h("thead", null, h("tr", null, h("th", { text: "Part" }), h("th", { text: "Finished" }), h("th", { class: "hide-sm", text: "" }), h("th", { text: "How" }), h("th", { text: "Confidence" }))), h("tbody", null, rows)),
+      h("p", { class: "muted", text: "Body measurement plus the ease for this style. A low-confidence row depends on a body number we are unsure about: tape it first." }));
   }
 
   function notesCard(o) {

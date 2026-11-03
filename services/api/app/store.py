@@ -53,8 +53,11 @@ def _conn() -> sqlite3.Connection:
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA foreign_keys = ON")
     c.executescript(SCHEMA)
-    if "applied_json" not in {r["name"] for r in c.execute("PRAGMA table_info(orders)")}:
+    cols = {r["name"] for r in c.execute("PRAGMA table_info(orders)")}
+    if "applied_json" not in cols:
         c.execute("ALTER TABLE orders ADD COLUMN applied_json TEXT NOT NULL DEFAULT '{}'")  # older databases
+    if "carried_from" not in cols:
+        c.execute("ALTER TABLE orders ADD COLUMN carried_from INTEGER")  # id of the order whose measurements this one reuses
     return c
 
 
@@ -71,12 +74,23 @@ _ORDER_SQL = ("SELECT o.*, c.name AS customer_name, c.phone AS customer_phone FR
               "JOIN customers c ON c.id = o.customer_id ")
 
 
-def create_order(name: str, phone: str | None, style_id: str | None, fabric_width_in: int = 45) -> dict:
+def create_order(name: str, phone: str | None, style_id: str | None, fabric_width_in: int = 45, *, customer_id: int | None = None,
+                 sheet: dict | None = None, height_cm: float | None = None, measured_at: str | None = None,
+                 carried_from: int | None = None) -> dict:
+    """A new order, for a new customer or (customer_id) a returning one. With `sheet` the order starts out measured,
+    reusing an earlier order's numbers (carried_from says which one)."""
     with _lock, _conn() as c:
-        cid = c.execute("INSERT INTO customers (name, phone, created_at) VALUES (?, ?, ?)", (name, phone, now())).lastrowid
-        oid = c.execute("INSERT INTO orders (customer_id, capture_token, style_id, fabric_width_in, created_at) VALUES (?, ?, ?, ?, ?)",
-                        (cid, secrets.token_urlsafe(16), style_id, fabric_width_in, now())).lastrowid
+        cid = customer_id or c.execute("INSERT INTO customers (name, phone, created_at) VALUES (?, ?, ?)", (name, phone, now())).lastrowid
+        oid = c.execute("INSERT INTO orders (customer_id, capture_token, style_id, fabric_width_in, created_at, status, sheet_json, height_cm, measured_at, carried_from) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (cid, secrets.token_urlsafe(16), style_id, fabric_width_in, now(), "measured" if sheet else "new",
+                         json.dumps(sheet) if sheet else None, height_cm, measured_at, carried_from)).lastrowid
         return _row(c.execute(_ORDER_SQL + "WHERE o.id = ?", (oid,)).fetchone())
+
+
+def orders_for_customer(customer_id: int) -> list[dict]:
+    with _conn() as c:
+        return [_row(r) for r in c.execute(_ORDER_SQL + "WHERE o.customer_id = ? ORDER BY o.id", (customer_id,)).fetchall()]
 
 
 def get_order(order_id: int) -> dict | None:
@@ -100,7 +114,7 @@ def attach_sheet(token: str, sheet: dict, height_cm: float, keep_photos: bool, a
     `applied` is the learned offsets (cm) already added to this sheet, so tape comparisons can be made on raw values."""
     with _lock, _conn() as c:
         c.execute("UPDATE orders SET sheet_json = ?, edits_json = '{}', applied_json = ?, height_cm = ?, status = 'measured', measured_at = ?, "
-                  "keep_photos = ?, deletion_requested_at = NULL WHERE capture_token = ?",
+                  "keep_photos = ?, deletion_requested_at = NULL, carried_from = NULL WHERE capture_token = ?",
                   (json.dumps(sheet), json.dumps(applied or {}), height_cm, now(), int(keep_photos), token))
 
 
@@ -152,7 +166,9 @@ def delete_order(order_id: int) -> bool:
         row = c.execute("SELECT customer_id FROM orders WHERE id = ?", (order_id,)).fetchone()
         if not row:
             return False
-        c.execute("DELETE FROM customers WHERE id = ?", (row["customer_id"],))  # cascades to the order
+        c.execute("DELETE FROM orders WHERE id = ?", (order_id,))  # cascades to its tape values
+        if not c.execute("SELECT 1 FROM orders WHERE customer_id = ?", (row["customer_id"],)).fetchone():
+            c.execute("DELETE FROM customers WHERE id = ?", (row["customer_id"],))  # the customer's last order: forget them too
     shutil.rmtree(order_dir(order_id), ignore_errors=True)
     return True
 

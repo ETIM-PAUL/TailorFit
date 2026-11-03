@@ -48,3 +48,13 @@ Every number you type into a measured order (or confirm with "Tape agrees") is s
 - Once a measurement has 6 orders with a steady one-sided bias (at least 1 cm), new sheets get that offset added and say so in the reason text. Gaps over 20 cm are treated as typos and ignored. Offsets never exceed 6 cm. Old sheets are never changed.
 - The tape history is kept if the customer retakes, and is deleted with the order.
 - Anything you type counts as a tape value, so use the field for what your tape says, not for style preferences (use allowances for those).
+
+## Returning customers
+
+On a measured order, "New order for <name>" starts a repeat order from the customer's latest numbers (your tape values where you entered them). It is ready straight away: no photos, yardage and cutting sheet included. Nothing is re-estimated, so repeat orders are not used to track accuracy. Numbers older than 6 months are marked medium with "the body may have changed".
+
+If the customer sends new photos on the repeat link, the numbers are replaced and the order shows **What changed** since the previous order. Estimates are only good to a few cm, so a change is listed only when it is bigger than that measurement's usual error (about 1.5 cm if both numbers were taped). Deleting an order deletes only that order; the customer is forgotten with their last order.
+
+## Finished garment and ease
+
+Each style has default ease (how much bigger the garment is than the body): senator chest 6 in, kaftan chest 18 in, gown chest 3 in, iro and buba chest 10 in, trouser hip and thigh 4 in. Change them per order on the style card; the cutting sheet and yardage follow. The "Finished garment" table (also on the PDF) shows each part's finished size, how it was worked out, and a confidence that is the weakest of the body numbers it came from. The defaults are common-cut starting points, not standards: please confirm them with a tailor.

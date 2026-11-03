@@ -7,7 +7,7 @@ Lower is better. `n/a` means no data for that column.
 
 | Measurement | Pilot error (cm) | Benchmark error (cm) | Consistency (cm) | Tailor's own variation (cm) | Benchmark bias (cm) |
 | --- | --- | --- | --- | --- | --- |
-| Bust / chest | n/a | 10.1 | n/a | n/a | -9.7 |
+| Bust / chest | n/a | 6.6 | n/a | n/a | -4.9 |
 | Waist | n/a | 6.0 | n/a | n/a | -3.5 |
 | Hip | n/a | 6.2 | n/a | n/a | +1.4 |
 | Shoulder width | n/a | 6.2 | n/a | n/a | +6.0 |
@@ -25,4 +25,4 @@ Lower is better. `n/a` means no data for that column.
 | Label | n | MAE (cm) |
 | --- | --- | --- |
 | medium | 422 | 4.5 |
-| low | 478 | 7.5 |
+| low | 478 | 6.4 |

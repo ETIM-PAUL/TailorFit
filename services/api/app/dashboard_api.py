@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import Response as RawResponse
 from pydantic import BaseModel, Field
 
-from . import auth, cutting_sheet, learning, pipeline, store, whatsapp
+from . import auth, cutting_sheet, learning, pipeline, repeat, store, whatsapp
 
 router = APIRouter(prefix="/v1")
 tailor = Depends(auth.require_tailor)
@@ -31,20 +31,24 @@ def order_view(o: dict) -> dict:
             "name": m["name"], "original_cm": m["value_cm"], "value_cm": round(cm, 1), "value_in": round(cm / 2.54, 1),
             "edited": m["name"] in edits, "confidence_label": m["confidence_label"],
             "confidence_score": m["confidence_score"], "reason": m["reason"]})
-    yardage = None
+    yardage, finished, ease = None, None, None
     if measurements and o.get("style_id"):
         allow = pipeline.calculator.Allowances(**(o.get("allowances") or {}))
         try:
             yardage = pipeline.calculator.calculate(o["style_id"], o["fabric_width_in"], measurements, allow)
+            finished = finished_view(o["style_id"], measurements, allow)
         except pipeline.calculator.CalcError as e:
             yardage = {"error": str(e)}
-    tape_first = tape_priority(measurements) if not (sheet or {}).get("stub") else []
+        defaults = pipeline.calculator.STYLE_EASE_IN[o["style_id"]]
+        ease = {"defaults": defaults, "values": {part: allow.ease(o["style_id"], part) for part in defaults}}
+    carried = o.get("carried_from")
+    tape_first = tape_priority(measurements) if not (sheet or {}).get("stub") and not carried else []
     return {
-        "tape_first": tape_first,
-        "id": o["id"], "status": o["status"], "customer": {"name": o["customer_name"], "phone": o["customer_phone"]},
+        "tape_first": tape_first, "carried_from": {"order_id": carried, "measured_at": o.get("measured_at")} if carried else None,
+        "id": o["id"], "status": o["status"], "customer": {"id": o["customer_id"], "name": o["customer_name"], "phone": o["customer_phone"]},
         "style": style_view(o.get("style_id")), "fabric_width_in": o["fabric_width_in"], "height_cm": o.get("height_cm"),
         "created_at": o["created_at"], "measured_at": o.get("measured_at"), "measurements": measurements,
-        "stub": bool((sheet or {}).get("stub")), "yardage": yardage,
+        "stub": bool((sheet or {}).get("stub")), "yardage": yardage, "finished": finished, "ease": ease,
         "allowances": pipeline.calculator.asdict(pipeline.calculator.Allowances(**(o.get("allowances") or {}))),
         "notes": o.get("notes") or "", "has_preview": bool(o["has_preview"]),
         "photos_kept": store.order_dir(o["id"]).is_dir() and any(p.name.endswith("-blurred.jpg") for p in store.order_dir(o["id"]).iterdir()),
@@ -56,6 +60,18 @@ def order_view(o: dict) -> dict:
 
 
 TAPE_FIRST_COUNT = 3
+RANK = {"high": 2, "medium": 1, "low": 0}
+
+
+def finished_view(style_id: str, measurements: list[dict], allow) -> list[dict]:
+    """Finished garment sizes, each carrying the weakest confidence among the body numbers it came from (a taped number counts as high)."""
+    by_name = {m["name"]: m for m in measurements}
+    rows = pipeline.calculator.finished_measurements(style_id, measurements, allow)
+    for r in rows:
+        labels = ["high" if by_name[n]["edited"] else by_name[n]["confidence_label"] for n in r["sources"]]
+        r["confidence_label"] = min(labels, key=RANK.get)
+        r["sources"] = [{"name": n, "label": l} for n, l in zip(r["sources"], labels)]
+    return rows
 
 
 def tape_priority(measurements: list[dict]) -> list[str]:
@@ -68,6 +84,12 @@ def tape_priority(measurements: list[dict]) -> list[str]:
     todo = [m for m in measurements if not m["edited"] and m["confidence_label"] != "high"]
     todo.sort(key=lambda m: (m["confidence_score"], -typical.get(m["name"], 5.0)))
     return [m["name"] for m in todo[:TAPE_FIRST_COUNT]]
+
+
+def full_view(o: dict) -> dict:
+    """order_view plus what needs the customer's other orders (single-order screens only: it costs a query)."""
+    orders = store.orders_for_customer(o["customer_id"])
+    return order_view(o) | {"order_count": len(orders), "changes": repeat.changes(o, orders), "can_repeat": repeat.latest_source(orders) is not None}
 
 
 def _get(order_id: int) -> dict:
@@ -120,7 +142,7 @@ def create_order(body: NewOrder):
         raise HTTPException(422, f"unknown style: {body.style_id}")
     if body.fabric_width_in not in FABRIC_WIDTHS:
         raise HTTPException(422, "fabric width must be 36, 45 or 60 inches")
-    return order_view(store.create_order(body.customer_name.strip(), (body.phone or "").strip() or None, body.style_id, body.fabric_width_in))
+    return full_view(store.create_order(body.customer_name.strip(), (body.phone or "").strip() or None, body.style_id, body.fabric_width_in))
 
 
 @router.get("/orders", dependencies=[tailor])
@@ -128,21 +150,44 @@ def list_orders():
     out = []
     for o in store.list_orders():
         v = order_view(o)
-        out.append({k: v[k] for k in ("id", "status", "customer", "style", "created_at", "measured_at", "low_confidence", "capture_url", "stub")}
+        out.append({k: v[k] for k in ("id", "status", "customer", "style", "created_at", "measured_at", "low_confidence", "capture_url", "stub", "carried_from")}
                     | {"yardage": v["yardage"]["display"] if v["yardage"] and "display" in v["yardage"] else None})
     return out
 
 
 @router.get("/orders/{order_id}", dependencies=[tailor])
 def get_order(order_id: int):
-    return order_view(_get(order_id))
+    return full_view(_get(order_id))
+
+
+class RepeatOrder(BaseModel):
+    style_id: str | None = None
+    fabric_width_in: int | None = None
+
+
+@router.post("/orders/{order_id}/repeat", dependencies=[tailor])
+def repeat_order(order_id: int, body: RepeatOrder):
+    """A new order for the same customer, starting from their latest numbers (no new photos needed)."""
+    o = _get(order_id)
+    src = repeat.latest_source(store.orders_for_customer(o["customer_id"]))
+    if not src:
+        raise HTTPException(409, "This customer has no measurements to reuse yet.")
+    style = body.style_id if body.style_id is not None else o.get("style_id")
+    if style and style not in pipeline.CATALOG:
+        raise HTTPException(422, f"unknown style: {style}")
+    width = body.fabric_width_in or o["fabric_width_in"]
+    if width not in FABRIC_WIDTHS:
+        raise HTTPException(422, "fabric width must be 36, 45 or 60 inches")
+    new = store.create_order(o["customer_name"], o["customer_phone"], style or None, width, customer_id=o["customer_id"],
+                             sheet=repeat.carry_sheet(src), height_cm=src.get("height_cm"), measured_at=src.get("measured_at"), carried_from=src["id"])
+    return full_view(new)
 
 
 class Patch(BaseModel):
     style_id: str | None = None
     fabric_width_in: int | None = None
     notes: str | None = Field(None, max_length=2000)
-    allowances: dict[str, float] | None = None
+    allowances: dict[str, float | None] | None = None  # None puts an ease value back to the style's default
     phone: str | None = Field(None, max_length=40)
 
 
@@ -163,14 +208,19 @@ def patch_order(order_id: int, body: Patch):
     if body.notes is not None:
         fields["notes"] = body.notes
     if body.allowances is not None:
-        merged = {**(o.get("allowances") or {}), **body.allowances}
+        merged = {**(o.get("allowances") or {})}
+        for k, v in body.allowances.items():
+            if v is None:
+                merged.pop(k, None)
+            else:
+                merged[k] = v
         try:
             pipeline.calculator.Allowances(**merged).validate()
         except (TypeError, pipeline.calculator.CalcError) as e:
             raise HTTPException(422, str(e))
         fields["allowances"] = merged
     store.update_order(order_id, **fields)
-    return order_view(_get(order_id))
+    return full_view(_get(order_id))
 
 
 class Edits(BaseModel):
@@ -194,13 +244,13 @@ def put_measurements(order_id: int, body: Edits):
             edits[name] = round(value, 1)
     store.update_order(order_id, edits=edits)
     _record_tape(o, body.edits)
-    return order_view(_get(order_id))
+    return full_view(_get(order_id))
 
 
 def _record_tape(o: dict, changed: dict[str, float | None]) -> None:
     """Every number the tailor types is taken as their tape value; keep it beside our raw estimate so accuracy can be tracked."""
-    if (o["sheet"] or {}).get("stub"):
-        return  # demo numbers are not estimates of anyone
+    if (o["sheet"] or {}).get("stub") or o.get("carried_from"):
+        return  # demo numbers are not estimates of anyone; carried numbers are not estimates made for this order
     by_name = {m["name"]: m for m in o["sheet"]["measurements"]}
     applied = o.get("applied") or {}
     rows: dict[str, dict | None] = {}
@@ -272,7 +322,7 @@ def capture_info(token: str):
     o = store.get_by_token(token)
     if not o:
         raise HTTPException(404, "This link is not valid.")
-    return {"customer_first_name": o["customer_name"].split()[0], "style": style_view(o.get("style_id")), "measured": o["status"] == "measured"}
+    return {"customer_first_name": o["customer_name"].split()[0], "style": style_view(o.get("style_id")), "measured": o["status"] == "measured" and not o.get("carried_from")}
 
 
 @router.post("/capture/{token}/delete-request")

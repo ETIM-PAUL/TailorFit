@@ -33,6 +33,10 @@ class Allowances:
     extra_pct: float = 5.0      # cutting mistakes and small pieces not modelled
     pattern_match_pct: float = 0.0  # large prints need extra to line motifs up
     round_to_yd: float = 0.25   # yardage is rounded up to this step
+    # Ease: how much bigger the garment is than the body, in inches around. None means the style's default (STYLE_EASE_IN).
+    chest_ease_in: float | None = None
+    hip_ease_in: float | None = None     # trousers
+    thigh_ease_in: float | None = None   # trousers
 
     def validate(self) -> None:
         for name, lo, hi in (("seam_in", 0, 3), ("hem_in", 0, 8), ("shrink_pct", 0, 20), ("extra_pct", 0, 30),
@@ -40,6 +44,25 @@ class Allowances:
             v = getattr(self, name)
             if not isinstance(v, (int, float)) or not lo <= v <= hi:
                 raise CalcError(f"{name} must be between {lo} and {hi}")
+        for name, lo, hi in (("chest_ease_in", 0, 40), ("hip_ease_in", 0, 20), ("thigh_ease_in", 0, 15)):
+            v = getattr(self, name)
+            if v is not None and (not isinstance(v, (int, float)) or not lo <= v <= hi):
+                raise CalcError(f"{name} must be between {lo} and {hi}")
+
+    def ease(self, style_id: str, part: str) -> float:
+        """Ease in inches for `part` ("chest", "hip", "thigh") of this style: the tailor's value, else the style's default."""
+        mine = getattr(self, f"{part}_ease_in")
+        return mine if mine is not None else STYLE_EASE_IN[style_id][part]
+
+
+# Default ease (inches around) per style. These are starting points from common cuts, not standards: a tailor changes
+# them per order, and the cutting sheet shows the finished size they give.
+STYLE_EASE_IN = {
+    "senator": {"chest": 6.0, "hip": 4.0, "thigh": 4.0},
+    "kaftan": {"chest": 18.0, "hip": 4.0, "thigh": 4.0},
+    "gown": {"chest": 3.0},
+    "iro_buba": {"chest": 10.0},
+}
 
 
 @dataclass
@@ -56,8 +79,8 @@ class Piece:
 
 TAPER_NEST = 0.85  # trouser legs narrow towards the hem, so alternate panels interlock
 
-def _trousers(m, a, ease=4.0):
-    leg = max((m["thigh"] + ease) / 2 + 2, (m["hip"] + ease) / 4 + 2)  # front or back panel of one leg
+def _trousers(m, a, style):
+    leg = max((m["thigh"] + a.ease(style, "thigh")) / 2 + 2, (m["hip"] + a.ease(style, "hip")) / 4 + 2)  # front or back panel of one leg
     return [
         Piece("trouser leg panel", leg, m["trouser_length"] + a.hem_in + 1.5, 4, nest=TAPER_NEST),
         Piece("waistband", 8, m["waist"] + 4),
@@ -67,40 +90,44 @@ def _trousers(m, a, ease=4.0):
 
 def senator(m, a):
     tunic = m["top_length"] + 4
+    chest = m["bust_chest"] + a.ease("senator", "chest")
     return [
-        Piece("tunic front", (m["bust_chest"] + 6) / 2, tunic + a.hem_in),
-        Piece("tunic back", (m["bust_chest"] + 6) / 2, tunic + a.hem_in),
+        Piece("tunic front", chest / 2, tunic + a.hem_in),
+        Piece("tunic back", chest / 2, tunic + a.hem_in),
         Piece("sleeve", m["arm_round"] + 5, m["sleeve_length"] + 3 + a.hem_in, 2),
         Piece("collar band", 3, m["neck"] + 1.5, 2),
         Piece("front placket", 3, 14, 2),
-    ] + _trousers(m, a)
+    ] + _trousers(m, a, "senator")
 
 
 def kaftan(m, a):
     robe = m["back_length"] + m["trouser_length"] - 4  # nape to just above the ankle
+    chest = m["bust_chest"] + a.ease("kaftan", "chest")
     return [
-        Piece("robe front", (m["bust_chest"] + 18) / 2, robe + a.hem_in),
-        Piece("robe back", (m["bust_chest"] + 18) / 2, robe + a.hem_in),
+        Piece("robe front", chest / 2, robe + a.hem_in),
+        Piece("robe back", chest / 2, robe + a.hem_in),
         Piece("wide sleeve", max(m["arm_round"] + 12, 16), 0.75 * m["sleeve_length"] + a.hem_in, 2),
         Piece("neck facing", 3, m["neck"] + 3),
-    ] + _trousers(m, a)
+    ] + _trousers(m, a, "kaftan")
 
 
 def gown(m, a):
     sweep = 2.2 * m["hip"]  # hem circumference of the flared skirt
     gore_w = ((m["hip"] + sweep) / 2) / 6  # six gores, cut nested head to tail
+    chest = m["bust_chest"] + a.ease("gown", "chest")
     return [
-        Piece("bodice front", (m["bust_chest"] + 3) / 2, m["back_length"] + 2),
-        Piece("bodice back", (m["bust_chest"] + 3) / 2, m["back_length"] + 2),
+        Piece("bodice front", chest / 2, m["back_length"] + 2),
+        Piece("bodice back", chest / 2, m["back_length"] + 2),
         Piece("skirt gore", gore_w, m["trouser_length"] + a.hem_in, 6),
         Piece("neck and armhole facing", 3, m["neck"] + 2 * (m["arm_round"] + 3)),
     ]
 
 
 def iro_buba(m, a):
+    chest = m["bust_chest"] + a.ease("iro_buba", "chest")
     return [
-        Piece("buba front", (m["bust_chest"] + 10) / 2, m["top_length"] + 4 + a.hem_in),
-        Piece("buba back", (m["bust_chest"] + 10) / 2, m["top_length"] + 4 + a.hem_in),
+        Piece("buba front", chest / 2, m["top_length"] + 4 + a.hem_in),
+        Piece("buba back", chest / 2, m["top_length"] + 4 + a.hem_in),
         Piece("buba sleeve", max(m["arm_round"] + 10, 15), m["sleeve_length"] + 3 + a.hem_in, 2),
         Piece("neck facing", 3, m["neck"] + 4),
         # Wrapper: waist to above the ankle, 1.5x the hip around. Tailors often turn it sideways.
@@ -114,6 +141,75 @@ STYLES = {
     "gown": (gown, ["bust_chest", "back_length", "hip", "trouser_length", "neck", "arm_round"]),
     "iro_buba": (iro_buba, ["bust_chest", "top_length", "arm_round", "sleeve_length", "neck", "hip", "trouser_length"]),
 }
+
+
+# ---------- finished garment sizes ----------
+# What the tailor needs on the sheet: how big each part of the garment ends up, and which body numbers it came from
+# (so a shaky body number shows up as a shaky garment number). Same formulas as the pieces above; tests keep them in step.
+
+def _fin(part, inches, sources, how):
+    return {"part": part, "inches": round(inches, 1), "cm": round(inches * CM_PER_IN, 1), "sources": sources, "how": how}
+
+
+def _fin_trousers(m, a, style):
+    he, te = a.ease(style, "hip"), a.ease(style, "thigh")
+    return [_fin("Trouser hip", m["hip"] + he, ["hip"], f"hip + {he:g} in ease"),
+            _fin("Trouser thigh", m["thigh"] + te, ["thigh"], f"thigh + {te:g} in ease"),
+            _fin("Trouser waist", m["waist"], ["waist"], "waist"),
+            _fin("Trouser length", m["trouser_length"], ["trouser_length"], "trouser length")]
+
+
+def _fin_senator(m, a):
+    ce = a.ease("senator", "chest")
+    return [_fin("Tunic chest", m["bust_chest"] + ce, ["bust_chest"], f"bust/chest + {ce:g} in ease"),
+            _fin("Tunic length", m["top_length"] + 4, ["top_length"], "top length + 4 in (hip-length)"),
+            _fin("Sleeve length", m["sleeve_length"], ["sleeve_length"], "sleeve length"),
+            _fin("Sleeve width", m["arm_round"] + 5, ["arm_round"], "arm round + 5 in ease"),
+            _fin("Collar", m["neck"] + 1.5, ["neck"], "neck + 1.5 in overlap")] + _fin_trousers(m, a, "senator")
+
+
+def _fin_kaftan(m, a):
+    ce = a.ease("kaftan", "chest")
+    return [_fin("Robe chest", m["bust_chest"] + ce, ["bust_chest"], f"bust/chest + {ce:g} in ease"),
+            _fin("Robe length", m["back_length"] + m["trouser_length"] - 4, ["back_length", "trouser_length"], "back length + trouser length - 4 in (nape to above the ankle)"),
+            _fin("Sleeve length", 0.75 * m["sleeve_length"], ["sleeve_length"], "three-quarter of sleeve length (wide sleeve)"),
+            _fin("Sleeve opening", max(m["arm_round"] + 12, 16), ["arm_round"], "arm round + 12 in (at least 16 in)")] + _fin_trousers(m, a, "kaftan")
+
+
+def _fin_gown(m, a):
+    ce = a.ease("gown", "chest")
+    return [_fin("Bodice chest", m["bust_chest"] + ce, ["bust_chest"], f"bust/chest + {ce:g} in ease"),
+            _fin("Bodice length", m["back_length"], ["back_length"], "back length"),
+            _fin("Skirt hem sweep", 2.2 * m["hip"], ["hip"], "2.2 x hip"),
+            _fin("Skirt length", m["trouser_length"], ["trouser_length"], "trouser length (floor length)")]
+
+
+def _fin_iro_buba(m, a):
+    ce = a.ease("iro_buba", "chest")
+    return [_fin("Buba chest", m["bust_chest"] + ce, ["bust_chest"], f"bust/chest + {ce:g} in ease"),
+            _fin("Buba length", m["top_length"] + 4, ["top_length"], "top length + 4 in"),
+            _fin("Sleeve length", m["sleeve_length"], ["sleeve_length"], "sleeve length"),
+            _fin("Sleeve width", max(m["arm_round"] + 10, 15), ["arm_round"], "arm round + 10 in (at least 15 in)"),
+            _fin("Iro width", 1.5 * m["hip"], ["hip"], "1.5 x hip"),
+            _fin("Iro length", m["trouser_length"] - 4, ["trouser_length"], "trouser length - 4 in")]
+
+
+FINISHED = {"senator": _fin_senator, "kaftan": _fin_kaftan, "gown": _fin_gown, "iro_buba": _fin_iro_buba}
+
+
+def finished_measurements(style_id: str, measurements: list[dict], allowances: Allowances | None = None) -> list[dict]:
+    """Finished size of each part of the garment (body measurement + ease), with the body numbers each came from.
+
+    measurements: [{name, value_cm}] (the numbers to cut from). Raises CalcError for an unknown style or missing numbers."""
+    if style_id not in FINISHED:
+        raise CalcError(f"unknown style: {style_id}")
+    a = allowances or Allowances()
+    a.validate()
+    by_name = {m["name"]: m["value_cm"] / CM_PER_IN for m in measurements}
+    missing = [n for n in STYLES[style_id][1] if n not in by_name]
+    if missing:
+        raise CalcError("missing measurements: " + ", ".join(missing))
+    return FINISHED[style_id](by_name, a)
 
 
 # ---------- packing ----------

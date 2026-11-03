@@ -143,3 +143,56 @@ def test_allowances_are_range_checked(bad):
 def test_zero_measurement_is_rejected():
     with pytest.raises(c.CalcError):
         c.calculate("senator", 45, sheet(hip=0))
+
+
+# ---- ease and finished garment sizes ----
+
+def fin(style, a=None, **over):
+    return {r["part"]: r for r in c.finished_measurements(style, sheet(**over), a)}
+
+
+@pytest.mark.parametrize("style", list(c.STYLES))
+def test_every_style_lists_finished_sizes_with_their_sources(style):
+    rows = c.finished_measurements(style, sheet())
+    assert len(rows) >= 4
+    for r in rows:
+        assert r["inches"] > 0 and r["cm"] == pytest.approx(r["inches"] * 2.54, abs=0.2) and r["sources"] and r["how"]
+        assert set(r["sources"]) <= set(c.STYLES[style][1])  # never depends on a number the style does not ask for
+
+
+def test_chest_ease_defaults_match_the_pieces_in_the_pattern():
+    """The finished chest is what the front and back pieces add up to, so the sheet and the yardage cannot drift apart."""
+    for style, front, back in (("senator", "tunic front", "tunic back"), ("kaftan", "robe front", "robe back"),
+                               ("gown", "bodice front", "bodice back"), ("iro_buba", "buba front", "buba back")):
+        pieces = {p["name"]: p for p in c.calculate(style, 45, sheet())["pieces"]}
+        chest = next(r for part, r in fin(style).items() if "chest" in part.lower())
+        assert pieces[front]["finished_w_in"] + pieces[back]["finished_w_in"] == pytest.approx(chest["inches"], abs=0.2), style
+
+
+def test_a_tailors_ease_changes_both_the_finished_size_and_the_yardage():
+    loose = c.Allowances(chest_ease_in=12)
+    assert fin("senator", loose)["Tunic chest"]["inches"] - fin("senator")["Tunic chest"]["inches"] == pytest.approx(6.0, abs=0.1)
+    assert c.calculate("senator", 45, sheet(), loose)["yards_exact"] > c.calculate("senator", 45, sheet())["yards_exact"]
+    assert "12 in ease" in fin("senator", loose)["Tunic chest"]["how"]
+
+
+def test_ease_zero_is_a_real_choice_not_a_missing_value():
+    assert c.Allowances(chest_ease_in=0).ease("senator", "chest") == 0
+    assert c.Allowances().ease("senator", "chest") == 6.0 and c.Allowances().ease("kaftan", "chest") == 18.0
+
+
+def test_each_style_keeps_its_own_default_ease():
+    assert fin("kaftan")["Robe chest"]["inches"] - fin("gown")["Bodice chest"]["inches"] == pytest.approx(15.0, abs=0.1)
+
+
+@pytest.mark.parametrize("bad", [dict(chest_ease_in=-1), dict(chest_ease_in=41), dict(hip_ease_in=21), dict(thigh_ease_in=16), dict(chest_ease_in="loose")])
+def test_ease_is_range_checked(bad):
+    with pytest.raises(c.CalcError):
+        c.calculate("senator", 45, sheet(), c.Allowances(**bad))
+
+
+def test_finished_sizes_refuse_unknown_styles_and_missing_numbers():
+    with pytest.raises(c.CalcError):
+        c.finished_measurements("tuxedo", sheet())
+    with pytest.raises(c.CalcError):
+        c.finished_measurements("senator", [m for m in sheet() if m["name"] != "neck"])
