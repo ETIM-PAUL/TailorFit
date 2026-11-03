@@ -36,6 +36,12 @@ THIGH_ROW_OFFSET = 0.06  # rows (share of height) below the crotch where the thi
 # within CHEST_DEPTH_BAND of those rows. Chosen on BodyM Test-A, judged on Test-B (see eval/README).
 CHEST_WINDOW = 0.06
 CHEST_DEPTH_BAND = 0.02
+# Shoulder: the bone-to-bone width is where the sloping shoulder line turns down into the arm. Scanning down from the
+# neck, the outline widens fast along the shoulder slope; the first place it widens slower than SHOULDER_SLOPE (cm of
+# width per cm of drop, smoothed over SHOULDER_SMOOTH_CM) is that corner. Below it the width keeps growing only because
+# the arms and deltoids join the outline. Chosen on BodyM Test-A, judged on Test-B (see eval/README).
+SHOULDER_SLOPE = 3.0
+SHOULDER_SMOOTH_CM = 1.5
 ARM_ROW_OFFSET = 0.01  # rows (as a share of height) below where the arms first separate, where the arm is measured
 
 
@@ -43,7 +49,8 @@ ARM_ROW_OFFSET = 0.01  # rows (as a share of height) below where the arms first 
 # masks, no clothing, no phone camera), so real photos will do worse. Confidence labels are capped by it: a number
 # we have measured to be 6 cm off on average cannot honestly be called "high". Measurements with no benchmark
 # counterpart are capped at medium. Update from eval/results/accuracy.md when the pilot data is in.
-TYPICAL_ERROR_CM = {"bust_chest": 6.6, "waist": 6.0, "hip": 6.5, "shoulder_width": 6.5, "arm_round": 3.0, "thigh": 6.0}
+# Shoulder uses the worse of Test-A (3.0) and Test-B (1.9): clothing changes the shoulder line more than the benchmark shows.
+TYPICAL_ERROR_CM = {"bust_chest": 6.6, "waist": 6.0, "hip": 6.5, "shoulder_width": 3.0, "arm_round": 3.0, "thigh": 6.0}
 HIGH_UNDER_CM, MEDIUM_UNDER_CM = 2.5, 6.0
 
 
@@ -150,6 +157,25 @@ class _View:
         return int(ys[int(np.argmax([fn(y) for y in ys]))])
 
 
+def _shoulder_corner(F: "_View", neck_y: int) -> float | None:
+    """Width (cm) at the shoulder corner below the neck, or None if the outline never turns (odd pose or mask)."""
+    ys = np.arange(neck_y, F.y(0.74))
+    if ys.size < 10:
+        return None
+    w = np.array([F.cwidth(int(y)) for y in ys])
+    k = max(1, int(round(SHOULDER_SMOOTH_CM / F.scale)))
+    ws = np.convolve(w, np.ones(k) / k, mode="same")
+    step = max(1, int(round(1.0 / F.scale)))                 # slope over 1 cm of drop
+    slope = (ws[step:] - ws[:-step]) / (step * F.scale)
+    rising = False
+    for i in range(int(round(1.0 / F.scale)), len(slope)):  # start 1 cm below the neck
+        if slope[i] > SHOULDER_SLOPE:
+            rising = True
+        elif rising:
+            return float(ws[i])
+    return None
+
+
 def _row_in(src: "_View", dst: "_View", y: int) -> int:
     """Row in `dst` at the same fraction of body height as row `y` in `src`.
 
@@ -250,7 +276,8 @@ def measure_from_masks(front, side, height_cm: float, mask_quality: tuple[float,
     else:
         v["arm_round"] = _Val(ARM_TO_BUST * v["bust_chest"].cm, "estimated", "arms touching body")
 
-    v["shoulder_width"] = _Val(F.cwidth(shoulder_y))
+    corner = _shoulder_corner(F, neck_y)
+    v["shoulder_width"] = _Val(corner) if corner is not None else _Val(F.cwidth(shoulder_y), "estimated", "shoulder line unclear in the photo")
 
     if arms_apart:
         outside = [y for y in range(F.y(0.80), F.y(0.25) + 1) if F.m[y, :lo].any() or F.m[y, hi + 1:].any()]

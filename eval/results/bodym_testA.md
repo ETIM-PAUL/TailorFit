@@ -10,7 +10,7 @@ Lower is better. `n/a` means no data for that column.
 | Bust / chest | n/a | 3.8 | n/a | n/a | +0.5 |
 | Waist | n/a | 3.2 | n/a | n/a | -0.9 |
 | Hip | n/a | 4.1 | n/a | n/a | -0.9 |
-| Shoulder width | n/a | 5.8 | n/a | n/a | +1.7 |
+| Shoulder width | n/a | 3.0 | n/a | n/a | +1.5 |
 | Sleeve length | n/a | n/a | n/a | n/a | n/a |
 | Arm round | n/a | 3.7 | n/a | n/a | +3.0 |
 | Neck | n/a | n/a | n/a | n/a | n/a |
@@ -25,4 +25,4 @@ Lower is better. `n/a` means no data for that column.
 | Label | n | MAE (cm) |
 | --- | --- | --- |
 | medium | 225 | 3.6 |
-| low | 297 | 5.5 |
+| low | 297 | 4.7 |

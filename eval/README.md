@@ -44,7 +44,7 @@ The engine was improved against BodyM **Test-A** (87 subjects; this is the set I
 | Bust / chest | 14.0 (+10.1) | **6.6** (-4.9) | 3.8 (+0.5) |
 | Waist | 8.4 (-7.4) | **6.0** (-3.5) | 3.2 (-0.9) |
 | Hip | 6.7 (-3.3) | **6.2** (+1.4) | 4.1 (-0.9) |
-| Shoulder width | 6.2 (+6.0) | **6.2** (+6.0) | 5.8 (+1.7) |
+| Shoulder width | 6.2 (+6.0) | **1.9** (-1.6) | 3.0 (+1.5) |
 | Arm round | 4.3 (+3.6) | **2.6** (+1.1) | 3.7 (+3.0) |
 | Thigh | 8.8 (+6.5) | **5.7** (-1.6) | 7.5 (+3.6) |
 
@@ -58,8 +58,12 @@ Read it honestly:
   now takes the widest torso in a window of 6% of height below that row (and the deepest side view around it). The window
   was chosen on Test-A, where it changed nothing (3.9 to 3.8 cm), and then judged on Test-B: **10.1 to 6.6 cm**. When the
   arms hang against the torso the window sits low, so chest can read a little small there.
-- Test-B is less controlled than Test-A and the gap shows. **Chest still reads about 5 cm small on Test-B**, so it stays labelled low. Shoulder width
-  did not improve (it reads the deltoid line, not the shoulder bone). Thigh has large scatter between people.
+- Shoulder width was reading the deltoids and the tops of the arms: the widest row near the shoulders was always the lowest
+  one searched, because the outline keeps widening as the arms join it. It now finds the shoulder corner instead: scanning
+  down from the neck, the first place the outline stops widening fast (3 cm of width per cm of drop). Chosen on Test-A
+  (5.8 to 3.0 cm), judged on Test-B: **6.2 to 1.9 cm**. Its confidence label uses the worse of the two (3.0 cm), so it
+  stays medium: clothing changes the shoulder line more than clean outlines do.
+- Test-B is less controlled than Test-A and the gap shows. **Chest still reads about 5 cm small on Test-B**, so it stays labelled low. Thigh has large scatter between people.
 - Six of the twelve measurements have a BodyM counterpart; neck, sleeve, back, top, trouser length and inseam have no benchmark
   figure at all. Definitions differ slightly (BodyM girths come from 3D scans), so part of any gap is definition.
 - This benchmark does not test SAM, clothing, the photo quality gate or phone cameras. Real photos will do worse.
