@@ -167,7 +167,12 @@
   function styleSelect(selected, withNone) {
     var s = h("select", { id: "style" });
     if (withNone) s.appendChild(h("option", { value: "", text: "Not chosen yet" }));
-    styles.forEach(function (st) { s.appendChild(h("option", { value: st.id, text: st.name })); });
+    var groups = {};  // Men / Women / Anyone, in the order the server lists them
+    styles.forEach(function (st) {
+      var g = st.group || "Anyone";
+      if (!groups[g]) { groups[g] = h("optgroup", { label: g === "Anyone" ? "For anyone" : "Usually for " + g.toLowerCase() }); s.appendChild(groups[g]); }
+      groups[g].appendChild(h("option", { value: st.id, text: st.name }));
+    });
     s.value = selected || ""; return s;
   }
   function showNew() {
@@ -285,7 +290,7 @@
     var A = o.allowances, fields = [["seam_in", "Seam (in)"], ["hem_in", "Hem (in)"], ["shrink_pct", "Shrinkage %"], ["extra_pct", "Extra %"], ["pattern_match_pct", "Print matching %"]];
     var inputs = {}; var allowRow = h("div", { class: "row" });
     fields.forEach(function (f) { inputs[f[0]] = h("input", { type: "number", step: "0.25", min: "0", id: "al-" + f[0], value: A[f[0]] }); allowRow.appendChild(h("div", null, h("label", { for: "al-" + f[0], text: f[1] }), inputs[f[0]])); });
-    var easeLabels = { chest: "Chest ease (in)", hip: "Trouser hip ease (in)", thigh: "Trouser thigh ease (in)" }, easeInputs = {}, easeRow = null;
+    var easeLabels = { chest: "Chest ease (in)", hip: "Hip ease (in)", thigh: "Thigh ease (in)" }, easeInputs = {}, easeRow = null;
     if (o.ease) {
       easeRow = h("div", { class: "row", id: "ease-row" });
       Object.keys(o.ease.defaults).forEach(function (part) {

@@ -68,8 +68,11 @@ def photo_files(**extra):
 
 
 def test_style_list():
-    ids = [s["id"] for s in client.get("/v1/styles").json()]
-    assert ids == ["senator", "kaftan", "gown", "iro_buba"]
+    styles = client.get("/v1/styles").json()
+    assert len(styles) == 13 and {"senator", "kaftan", "gown", "iro_buba", "agbada", "bubu"} <= {s["id"] for s in styles}
+    assert {s["group"] for s in styles} == {"Men", "Women", "Anyone"}
+    groups = [s["group"] for s in styles]
+    assert groups == sorted(groups, key=["Men", "Women", "Anyone"].index)  # listed in picker order
 
 
 def test_preview_needs_consent_and_exactly_one_style_source():

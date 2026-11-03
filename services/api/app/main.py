@@ -180,7 +180,7 @@ async def whatsapp_incoming(request: Request):
 
 @app.get("/v1/styles")
 def list_styles():
-    return [{"id": k, "name": v["name"]} for k, v in pipeline.CATALOG.items()]
+    return [{"id": k, "name": v["name"], "group": v.get("group", "Anyone")} for k, v in pipeline.CATALOG.items()]
 
 
 @app.post("/v1/previews", dependencies=[Depends(security.limit("preview", 6))])

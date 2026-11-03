@@ -119,8 +119,19 @@ def test_label_is_burned_into_the_bottom_of_the_image():
 
 # ---- whole flow ----
 
-def test_catalog_has_the_four_starting_styles():
-    assert set(CATALOG) == {"senator", "kaftan", "gown", "iro_buba"}
+def test_catalog_has_the_starting_styles_with_a_group_and_a_cut_description():
+    assert {"senator", "kaftan", "gown", "iro_buba", "agbada", "bubu", "dashiki", "shirt", "trousers"} <= set(CATALOG)
+    from styles import GROUPS
+    for sid, st in CATALOG.items():
+        assert st["name"] and st["group"] in GROUPS and len(st["description"]) > 30, sid
+
+
+def test_every_catalog_style_has_a_pattern_for_the_yardage():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "fabric-calculator"))
+    import calculator
+    assert set(CATALOG) == set(calculator.STYLES)
 
 
 def test_customer_preview_for_catalog_style(seg):

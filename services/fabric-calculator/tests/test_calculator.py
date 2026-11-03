@@ -72,11 +72,34 @@ def test_bigger_body_never_needs_less_cloth(style):
     assert big >= small
 
 
+# Rough ranges for one average adult, all fabric widths. Not tailor truth: only guards against absurd output
+# (the pilot tailor decides the real defaults). An agbada is three garments, so it needs the most cloth.
+BANDS = {"agbada": (6, 16), "dashiki": (1, 4), "shirt": (1.5, 5), "trousers": (1.5, 5), "mermaid_gown": (1.5, 6)}
+
+
 @pytest.mark.parametrize("style", list(c.STYLES))
 def test_sanity_band(style):
-    """Not tailor truth: only guards against absurd output (the pilot tailor decides the real defaults)."""
+    lo, hi = BANDS.get(style, (2, 10))
     for w in c.FABRIC_WIDTHS:
-        assert 2 <= c.calculate(style, w, sheet())["yards"] <= 10
+        assert lo <= c.calculate(style, w, sheet())["yards"] <= hi, w
+
+
+def test_every_style_has_ease_finished_sizes_and_a_pattern():
+    assert set(c.STYLES) == set(c.FINISHED) == set(c.STYLE_EASE_IN)
+
+
+def test_agbada_needs_more_cloth_than_the_senator_it_resembles():
+    assert c.calculate("agbada", 45, sheet())["yards"] > c.calculate("senator", 45, sheet())["yards"] + 3
+
+
+def test_a_shirt_or_trousers_alone_need_less_than_a_full_senator():
+    senator = c.calculate("senator", 45, sheet())["yards_exact"]
+    assert c.calculate("shirt", 45, sheet())["yards_exact"] < senator and c.calculate("trousers", 45, sheet())["yards_exact"] < senator
+
+
+def test_a_row_a_hair_too_wide_still_counts_as_fitting():
+    assert c.pack([("a", 20, 40), ("b", 20.3, 40)], 40)[0] == 40      # 0.3 in over: shift or trim
+    assert c.pack([("a", 20, 40), ("b", 21, 40)], 40)[0] == 80        # a full inch over: a new row
 
 
 def test_taller_customer_needs_more_for_long_garments():

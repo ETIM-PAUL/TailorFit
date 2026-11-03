@@ -62,4 +62,22 @@ If the customer sends new photos on the repeat link, the numbers are replaced an
 
 ## Finished garment and ease
 
-Each style has default ease (how much bigger the garment is than the body): senator chest 6 in, kaftan chest 18 in, gown chest 3 in, iro and buba chest 10 in, trouser hip and thigh 4 in. Change them per order on the style card; the cutting sheet and yardage follow. The "Finished garment" table (also on the PDF) shows each part's finished size, how it was worked out, and a confidence that is the weakest of the body numbers it came from. The defaults are common-cut starting points, not standards: please confirm them with a tailor.
+Each style has default ease (how much bigger the garment is than the body, in inches around):
+
+| Style | Chest | Hip | Thigh |
+| --- | --- | --- | --- |
+| Agbada (inner top and sokoto; the outer robe is cut from the arm span) | 10 | 8 | 8 |
+| Senator | 6 | 4 | 4 |
+| Kaftan | 18 | 4 | 4 |
+| Buba and sokoto | 12 | 8 | 8 |
+| Gown | 3 | | |
+| Mermaid gown | 2 | 2 | |
+| Iro and buba | 10 | | |
+| Bubu | 40 | | |
+| Skirt and blouse | 3 | 2 | |
+| Jumpsuit | 4 | 4 | 4 |
+| Dashiki | 12 | | |
+| Long-sleeved shirt | 4 | | |
+| Trousers | | 4 | 4 |
+
+Change them per order on the style card; the cutting sheet and yardage follow. The "Finished garment" table (also on the PDF) shows each part's finished size, how it was worked out, and a confidence that is the weakest of the body numbers it came from. The defaults are common-cut starting points, not standards: please confirm them with a tailor.

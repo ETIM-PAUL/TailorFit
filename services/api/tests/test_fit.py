@@ -67,3 +67,19 @@ def test_cutting_sheet_pdf_has_the_finished_garment_table(tailor, monkeypatch):
     assert pdf.status_code == 200
     text = "".join(p.extract_text() for p in PdfReader(io.BytesIO(pdf.content)).pages)
     assert "Finished garment (Senator)" in text and "Tunic chest" in text and "6 in ease" in text
+
+
+import pytest  # noqa: E402
+
+from app import pipeline  # noqa: E402
+
+
+@pytest.mark.parametrize("style_id", list(pipeline.CATALOG))
+def test_every_style_gives_yardage_finished_sizes_and_a_cutting_sheet(tailor, monkeypatch, style_id):
+    oid = measured(tailor, monkeypatch, style_id=style_id)
+    v = tailor.get(f"/v1/orders/{oid}").json()
+    assert v["style"]["id"] == style_id and "display" in v["yardage"], v["yardage"]
+    assert v["finished"] and all(r["confidence_label"] in ("high", "medium", "low") for r in v["finished"])
+    assert set(v["ease"]["values"]) == set(v["ease"]["defaults"])
+    pdf = tailor.get(f"/v1/orders/{oid}/cutting-sheet.pdf")
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
