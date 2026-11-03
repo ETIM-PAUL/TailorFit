@@ -144,7 +144,7 @@
   }
 
   function measurementsCard(o) {
-    var dirty = {}, save = h("button", { id: "save-edits", text: "Save changes", disabled: true });
+    var dirty = {}, save = h("button", { id: "save-edits", text: "Save changes", disabled: true }), tapeNow = o.tape_first || [];
     var body = h("tbody");
     o.measurements.forEach(function (m) {
       var input = h("input", { type: "number", step: "0.1", min: "5", max: "300", value: m.value_cm, "aria-label": pretty(m.name) + " in cm", "data-name": m.name });
@@ -157,12 +157,15 @@
         h("td", { class: m.edited ? "edited" : "" }, input), h("td", { class: "hide-sm", text: m.value_in.toFixed(1) }),
         h("td", null, h("span", { class: "conf-" + m.confidence_label, text: m.confidence_label }), h("div", { class: "why", text: m.reason })),
         h("td", null, m.edited ? h("button", { class: "ghost", style: "padding:4px 8px;font-size:.8rem", text: "Undo edit", onclick: function () { var e = {}; e[m.name] = null; saveEdits(o.id, e); } }) : null)];
-      body.appendChild(h("tr", { "data-row": m.name }, cells));
+      if (!m.edited) cells[5] = h("td", null, h("button", { class: "ghost", style: "padding:4px 8px;font-size:.8rem", "data-agree": m.name, text: "Tape agrees", onclick: function () { var e = {}; e[m.name] = m.original_cm; saveEdits(o.id, e); } }));
+      body.appendChild(h("tr", { "data-row": m.name, class: tapeNow.indexOf(m.name) >= 0 ? "tape-now" : "" }, cells));
     });
     save.addEventListener("click", function () { saveEdits(o.id, dirty); });
     return h("div", { class: "card" }, h("h2", { text: "Measurements" }),
       o.stub ? h("p", { class: "notice error", text: "Demo values: the measurement engine was not connected, so these numbers are not real." }) : null,
-      h("p", { class: "muted", text: "Edit any value after checking with a tape. The original estimate is kept beside it." }),
+      tapeNow.length ? h("div", { class: "tapefirst", id: "tape-first" }, h("strong", { text: "Tape these first: " + tapeNow.map(pretty).join(", ") }),
+        h("div", { class: "muted", text: "These are the numbers we are least sure of. The rest are likely close enough to start cutting." })) : null,
+      h("p", { class: "muted", text: "Type what your tape says, or press \"Tape agrees\" if our number is right. Your tape values are saved to track how accurate we are for you (see Accuracy), and they never change the original estimate." }),
       h("table", null, h("thead", null, h("tr", null, h("th", { text: "Measurement" }), h("th", { class: "hide-sm", text: "Original cm" }), h("th", { text: "cm" }), h("th", { class: "hide-sm", text: "in" }), h("th", { text: "Confidence" }), h("th"))), body),
       h("p", { class: "error", id: "edit-error", role: "alert" }), h("div", { class: "actions" }, save));
   }
@@ -206,6 +209,27 @@
     return h("div", { class: "card" }, h("h2", { text: "Privacy" }), h("p", { class: "muted", id: "privacy-status", text: status }), actions);
   }
 
+  // ---- accuracy: how far our estimates were from this tailor's tape ----
+  function showAccuracy() {
+    stopTimer(); nav.hidden = false;
+    api("GET", "/v1/accuracy").then(function (a) {
+      var rows = a.measurements.map(function (m) {
+        var max = Math.max.apply(null, m.series_cm.concat([1]));
+        var spark = h("div", { class: "spark", "aria-label": "Gap per order, oldest first" }, m.series_cm.slice(-12).map(function (e) { return h("i", { style: "height:" + Math.max(2, Math.round(36 * e / max)) + "px", title: e + " cm" }); }));
+        var trend = m.first_mae_cm !== null ? (m.first_mae_cm + " → " + m.recent_mae_cm + " cm") : "needs 4 orders";
+        return h("tr", { "data-acc": m.name }, h("td", null, h("strong", { text: pretty(m.name) })), h("td", { text: String(m.n) }),
+          h("td", { text: m.mae_cm + " cm" }), h("td", { text: (m.bias_cm > 0 ? "+" : "") + m.bias_cm + " cm" }), h("td", { class: m.recent_mae_cm !== null && m.recent_mae_cm < m.first_mae_cm ? "good" : "", text: trend }),
+          h("td", { text: m.offset_cm ? (m.offset_cm > 0 ? "+" : "") + m.offset_cm + " cm applied" : "not yet" }), h("td", null, spark));
+      });
+      mount(h("div", { class: "row", style: "align-items:center" }, h("h1", { text: "Accuracy" }), h("div", { style: "text-align:right" }, h("button", { class: "ghost", text: "← All orders", onclick: showList }))),
+        h("div", { class: "card" }, h("p", { class: "muted", id: "acc-intro", text: a.orders ? "Based on " + a.orders + " order" + (a.orders === 1 ? "" : "s") + " where you entered a tape value. Gap = how far our estimate was from your tape. Bias is positive when we read too big."
+            : "No tape values yet. Open a measured order, type what your tape says (or press \"Tape agrees\"), and this page fills in." }),
+          a.measurements.length ? h("table", null, h("thead", null, h("tr", null, ["Measurement", "Checked", "Average gap", "Bias", "First → latest orders", "Learned offset", "Gap per order"].map(function (t) { return h("th", { text: t }); }))), h("tbody", null, rows)) : null,
+          h("p", { class: "muted", text: "A learned offset is only applied to new sheets once a measurement has " + a.min_orders + " orders with a steady one-sided bias. Older sheets are never changed. Until then this page only reports." })));
+    }).catch(function () {});
+  }
+
+  document.getElementById("acc-btn").addEventListener("click", showAccuracy);
   document.getElementById("home-btn").addEventListener("click", showList);
   document.getElementById("logout-btn").addEventListener("click", function () { api("POST", "/v1/auth/logout").then(function () { showLogin(); }); });
 

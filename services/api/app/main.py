@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Red
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import contract, dashboard_api, images, meta, pipeline, security, store, stubs, whatsapp
+from . import contract, dashboard_api, images, learning, meta, pipeline, security, store, stubs, whatsapp
 from .env import load_env
 
 load_env()
@@ -108,12 +108,15 @@ async def create_measurements(
     else:
         sheet = stubs.build_sheet(request_id, locale, height_cm)
     blurred = sheet.pop("_blurred", None)
+    applied: dict = {}
+    if order and not sheet.get("stub"):
+        sheet["measurements"], applied = learning.apply(sheet["measurements"])  # this tailor's earlier tape values
     contract.validate("MeasurementSheet", sheet)
     kept = False
     if order:
         # Photos are only kept if the customer opted in, and only the face-blurred versions (never in stub mode).
         kept = bool(keep_photos and blurred)
-        store.attach_sheet(order_token, sheet, height_cm, kept)
+        store.attach_sheet(order_token, sheet, height_cm, kept, applied)
         store.clear_files(order["id"])  # a retake replaces whatever was kept before, including an old preview
         store.set_preview_flag(order["id"], False)
         if kept:

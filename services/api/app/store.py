@@ -26,6 +26,10 @@ CREATE TABLE IF NOT EXISTS orders (
   sheet_json TEXT, edits_json TEXT NOT NULL DEFAULT '{}', allowances_json TEXT NOT NULL DEFAULT '{}', notes TEXT NOT NULL DEFAULT '',
   keep_photos INTEGER NOT NULL DEFAULT 0, has_preview INTEGER NOT NULL DEFAULT 0,
   deletion_requested_at TEXT, photos_deleted_at TEXT, created_at TEXT NOT NULL, measured_at TEXT);
+CREATE TABLE IF NOT EXISTS tape_log (
+  order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE, name TEXT NOT NULL,
+  predicted_cm REAL NOT NULL, raw_cm REAL NOT NULL, tape_cm REAL NOT NULL, label TEXT NOT NULL, recorded_at TEXT NOT NULL,
+  PRIMARY KEY (order_id, name));
 CREATE TABLE IF NOT EXISTS wa_seen (id TEXT PRIMARY KEY, seen_at TEXT NOT NULL);
 """
 
@@ -49,6 +53,8 @@ def _conn() -> sqlite3.Connection:
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA foreign_keys = ON")
     c.executescript(SCHEMA)
+    if "applied_json" not in {r["name"] for r in c.execute("PRAGMA table_info(orders)")}:
+        c.execute("ALTER TABLE orders ADD COLUMN applied_json TEXT NOT NULL DEFAULT '{}'")  # older databases
     return c
 
 
@@ -56,7 +62,7 @@ def _row(r: sqlite3.Row | None) -> dict | None:
     if r is None:
         return None
     d = dict(r)
-    for k in ("sheet_json", "edits_json", "allowances_json"):
+    for k in ("sheet_json", "edits_json", "allowances_json", "applied_json"):
         d[k[:-5]] = json.loads(d.pop(k)) if d.get(k) else ({} if k != "sheet_json" else None)
     return d
 
@@ -88,12 +94,14 @@ def list_orders() -> list[dict]:
         return [_row(r) for r in c.execute(_ORDER_SQL + "ORDER BY o.id DESC").fetchall()]
 
 
-def attach_sheet(token: str, sheet: dict, height_cm: float, keep_photos: bool) -> None:
-    """Customer finished capture. A retake replaces the sheet and clears the tailor's edits."""
+def attach_sheet(token: str, sheet: dict, height_cm: float, keep_photos: bool, applied: dict | None = None) -> None:
+    """Customer finished capture. A retake replaces the sheet and clears the tailor's edits.
+
+    `applied` is the learned offsets (cm) already added to this sheet, so tape comparisons can be made on raw values."""
     with _lock, _conn() as c:
-        c.execute("UPDATE orders SET sheet_json = ?, edits_json = '{}', height_cm = ?, status = 'measured', measured_at = ?, "
+        c.execute("UPDATE orders SET sheet_json = ?, edits_json = '{}', applied_json = ?, height_cm = ?, status = 'measured', measured_at = ?, "
                   "keep_photos = ?, deletion_requested_at = NULL WHERE capture_token = ?",
-                  (json.dumps(sheet), height_cm, now(), int(keep_photos), token))
+                  (json.dumps(sheet), json.dumps(applied or {}), height_cm, now(), int(keep_photos), token))
 
 
 def update_order(order_id: int, **fields) -> None:
@@ -116,6 +124,22 @@ def update_order(order_id: int, **fields) -> None:
 def update_phone(order_id: int, phone: str | None) -> None:
     with _lock, _conn() as c:
         c.execute("UPDATE customers SET phone = ? WHERE id = (SELECT customer_id FROM orders WHERE id = ?)", (phone, order_id))
+
+
+def set_tape(order_id: int, rows: dict[str, dict | None]) -> None:
+    """rows: name -> {predicted_cm, raw_cm, tape_cm, label}, or None to forget that measurement's tape value."""
+    with _lock, _conn() as c:
+        for name, r in rows.items():
+            if r is None:
+                c.execute("DELETE FROM tape_log WHERE order_id = ? AND name = ?", (order_id, name))
+            else:
+                c.execute("INSERT OR REPLACE INTO tape_log (order_id, name, predicted_cm, raw_cm, tape_cm, label, recorded_at) VALUES (?,?,?,?,?,?,?)",
+                          (order_id, name, r["predicted_cm"], r["raw_cm"], r["tape_cm"], r["label"], now()))
+
+
+def list_tape() -> list[dict]:
+    with _conn() as c:
+        return [dict(r) for r in c.execute("SELECT * FROM tape_log ORDER BY recorded_at, order_id, name")]
 
 
 def set_preview_flag(order_id: int, has: bool) -> None:

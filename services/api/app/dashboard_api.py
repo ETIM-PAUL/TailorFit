@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import Response as RawResponse
 from pydantic import BaseModel, Field
 
-from . import auth, cutting_sheet, pipeline, store, whatsapp
+from . import auth, cutting_sheet, learning, pipeline, store, whatsapp
 
 router = APIRouter(prefix="/v1")
 tailor = Depends(auth.require_tailor)
@@ -38,7 +38,9 @@ def order_view(o: dict) -> dict:
             yardage = pipeline.calculator.calculate(o["style_id"], o["fabric_width_in"], measurements, allow)
         except pipeline.calculator.CalcError as e:
             yardage = {"error": str(e)}
+    tape_first = tape_priority(measurements) if not (sheet or {}).get("stub") else []
     return {
+        "tape_first": tape_first,
         "id": o["id"], "status": o["status"], "customer": {"name": o["customer_name"], "phone": o["customer_phone"]},
         "style": style_view(o.get("style_id")), "fabric_width_in": o["fabric_width_in"], "height_cm": o.get("height_cm"),
         "created_at": o["created_at"], "measured_at": o.get("measured_at"), "measurements": measurements,
@@ -51,6 +53,21 @@ def order_view(o: dict) -> dict:
         "whatsapp": {"phone_digits": whatsapp.normalize_phone(o.get("customer_phone")), "auto": whatsapp.configured()},
         "low_confidence": sum(1 for m in measurements if m["confidence_label"] == "low" and not m["edited"]),
     }
+
+
+TAPE_FIRST_COUNT = 3
+
+
+def tape_priority(measurements: list[dict]) -> list[str]:
+    """Which numbers to check with a tape first: the ones we trust least and that have the most room to be wrong.
+
+    Unchecked numbers only. Ranked by confidence score, then by the typical benchmark error for that measurement
+    (so chest comes before neck when both are low). Numbers we label high are never listed.
+    """
+    typical = pipeline.measure2d.TYPICAL_ERROR_CM
+    todo = [m for m in measurements if not m["edited"] and m["confidence_label"] != "high"]
+    todo.sort(key=lambda m: (m["confidence_score"], -typical.get(m["name"], 5.0)))
+    return [m["name"] for m in todo[:TAPE_FIRST_COUNT]]
 
 
 def _get(order_id: int) -> dict:
@@ -176,7 +193,29 @@ def put_measurements(order_id: int, body: Edits):
         else:
             edits[name] = round(value, 1)
     store.update_order(order_id, edits=edits)
+    _record_tape(o, body.edits)
     return order_view(_get(order_id))
+
+
+def _record_tape(o: dict, changed: dict[str, float | None]) -> None:
+    """Every number the tailor types is taken as their tape value; keep it beside our raw estimate so accuracy can be tracked."""
+    if (o["sheet"] or {}).get("stub"):
+        return  # demo numbers are not estimates of anyone
+    by_name = {m["name"]: m for m in o["sheet"]["measurements"]}
+    applied = o.get("applied") or {}
+    rows: dict[str, dict | None] = {}
+    for name, value in changed.items():
+        m = by_name.get(name)
+        if m is None:
+            continue
+        rows[name] = None if value is None else {"predicted_cm": m["value_cm"], "raw_cm": round(m["value_cm"] - applied.get(name, 0.0), 1),
+                                                 "tape_cm": round(value, 1), "label": m["confidence_label"]}
+    store.set_tape(o["id"], rows)
+
+
+@router.get("/accuracy", dependencies=[tailor])
+def accuracy():
+    return learning.accuracy()
 
 
 @router.get("/orders/{order_id}/preview.jpg", dependencies=[tailor])

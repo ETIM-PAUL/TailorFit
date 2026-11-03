@@ -39,3 +39,12 @@ these empty the dashboard stays off. Orders go in `data/tailorfit.db` and kept p
 - Photos are kept on the server's disk; the final storage choice (S3-style bucket) is still open.
 - Tested by driving real Chrome through the whole flow against the real Meta services; that script is not in
   the repo because it needs an API key and sample photos.
+
+## Tape values and the Accuracy page
+
+Every number you type into a measured order (or confirm with "Tape agrees") is saved as your tape value, next to our raw estimate. The Accuracy page shows, per measurement, the average gap, the bias, and how the gap changed from your first orders to your latest.
+
+- The "Tape these first" banner lists up to three numbers we trust least that you haven't checked yet. Numbers labelled high are never listed.
+- Once a measurement has 6 orders with a steady one-sided bias (at least 1 cm), new sheets get that offset added and say so in the reason text. Gaps over 20 cm are treated as typos and ignored. Offsets never exceed 6 cm. Old sheets are never changed.
+- The tape history is kept if the customer retakes, and is deleted with the order.
+- Anything you type counts as a tape value, so use the field for what your tape says, not for style preferences (use allowances for those).
