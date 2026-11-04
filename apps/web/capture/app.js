@@ -9,7 +9,7 @@
     },
     side: {
       title: "Side photo",
-      tips: ["Turn a quarter turn so the camera sees your side.", "Arms down by your sides, standing straight, looking ahead.", "Same fitted clothes, same distance as the front photo.", "Head and feet must both be in view."],
+      tips: ["Turn a quarter turn so the camera sees your side.", "Arms straight down by your sides, not in front of your hips. Stand straight and look ahead.", "Same fitted clothes, same distance as the front photo.", "Head and feet must both be in view."],
       path: "M50 14 a8 9 0 1 0 .01 0 M46 30 L44 110 L46 190 M54 30 L56 110 L54 190 M44 60 L58 62 M44 110 L58 108"
     }
   };
@@ -75,6 +75,7 @@
     state.view = view; state.pendingBlob = null;
     var v = VIEWS[view];
     $("cap-title").textContent = v.title;
+    $("laptop-tip").hidden = !isLaptop();
     $("cap-tips").innerHTML = "";
     v.tips.forEach(function (t) { var li = document.createElement("li"); li.textContent = t; $("cap-tips").appendChild(li); });
     $("silhouette").setAttribute("d", v.path);
@@ -92,6 +93,8 @@
     $("inframe-box").checked = false; $("use").disabled = true;
   }
 
+  function isLaptop() { return !(window.matchMedia && matchMedia("(pointer: coarse)").matches); }
+
   // Phones with an ultra-wide back camera (iPhone 11 and newer) can show a whole body from about half the distance.
   var wide = { id: null, probed: false, active: false };
 
@@ -99,7 +102,10 @@
     stopCamera();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return useFallback();
     var useWide = !!(wide.id && state.facing === "environment" && $("wide-box").checked);
-    var video = useWide ? { deviceId: { exact: wide.id }, height: { ideal: 1920 } } : { facingMode: state.facing, height: { ideal: 1920 } };
+    // Phones: ask for a tall picture (portrait). Laptop webcams are landscape, and asking them for a tall picture makes the
+    // browser crop a narrow strip out of the middle, so ask for their full native view instead.
+    var size = isLaptop() ? { width: { ideal: 1920 }, height: { ideal: 1080 }, resizeMode: "none" } : { height: { ideal: 1920 } };
+    var video = Object.assign(useWide ? { deviceId: { exact: wide.id } } : { facingMode: state.facing }, size);
     navigator.mediaDevices.getUserMedia({ video: video, audio: false })
       .then(function (s) {
         wide.active = useWide;
@@ -217,8 +223,13 @@
   function postFrame(blob) {
     var fd = new FormData(); fd.append("frame", blob, "frame.jpg");
     return fetch("/v1/framing", { method: "POST", body: fd }).then(function (r) {
-      if (r.status === 503) framing.off = true;  // not available on this server: stay quiet
-      if (!r.ok) throw new Error("framing " + r.status);
+      if (!r.ok) {
+        // Switch off only when the server has no model key; a one-off error or a busy model just means "try the next frame".
+        return r.json().catch(function () { return {}; }).then(function (d) {
+          if (r.status === 503 && /API key/i.test(String(d.detail || ""))) framing.off = true;
+          throw new Error("framing " + r.status);
+        });
+      }
       return r.json();
     });
   }
