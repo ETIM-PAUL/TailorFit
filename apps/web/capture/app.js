@@ -179,8 +179,10 @@
   }
 
   function updateShoot() {
-    // Level phone required when the sensor works; without a sensor we allow the shot and note it.
-    var ready = !!state.stream && $("video").videoWidth > 0 && (state.tiltNow === null || TF.isLevel(state.tiltNow));
+    // Tilt is a warning, never a lock: propping the phone against whatever is at hand is often the only
+    // option, and a tilted photo the engine can use beats no photo at all. The red text above already
+    // says when it's off, and a tilted shot is flagged again on review.
+    var ready = !!state.stream && $("video").videoWidth > 0;
     $("shoot").disabled = counting() ? false : !ready;
   }
   $("video").addEventListener("loadedmetadata", updateShoot);

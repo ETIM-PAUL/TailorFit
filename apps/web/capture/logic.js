@@ -46,14 +46,16 @@
   }
 
   // Messages for the live "is your whole body in view?" check.
+  // Every message starts with a glyph: with the back camera you're reading this from a few metres away, so
+  // the shape and colour need to carry the meaning even before the words are legible.
   var FRAMING = {
     ok: ["✓ Whole body in view. This distance is fine.", "ok"],
     too_small: ["✓ Whole body in view. You can step closer.", "ok"],
-    head_cut: ["Your head is cut off. Step back a little.", "warn"],
-    feet_cut: ["Your feet are cut off. Step back a little.", "warn"],
-    both_cut: ["Head and feet are cut off. Step back.", "warn"],
-    sides_cut: ["Your body touches the side of the frame. Move to the middle.", "warn"],
-    no_person: ["Stand in front of the camera so we can see you.", "info"]
+    head_cut: ["▲ Your head is cut off. Step back a little.", "warn"],
+    feet_cut: ["▼ Your feet are cut off. Step back a little.", "warn"],
+    both_cut: ["▲▼ Head and feet are cut off. Step back.", "warn"],
+    sides_cut: ["◀▶ Your body touches the side of the frame. Move to the middle.", "warn"],
+    no_person: ["? Stand in front of the camera so we can see you.", "info"]
   };
   function framingMessage(status) { var m = FRAMING[status]; return m ? { text: m[0], level: m[1] } : null; }
 
