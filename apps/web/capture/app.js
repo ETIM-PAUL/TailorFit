@@ -4,18 +4,19 @@
   var VIEWS = {
     front: {
       title: "Front photo",
-      tips: ["Face the camera, standing straight, feet a little apart.", "Arms slightly away from your body (about a hand's width).", "Wear fitted clothes, not loose ones.", "Prop the phone upright and level. Step back only until the banner on the camera turns green (your whole body is in view). Standing further back than that makes the photo less accurate."],
-      path: "M50 14 a8 9 0 1 0 .01 0 M42 30 L28 38 L18 100 M58 30 L72 38 L82 100 M42 30 L40 110 L38 190 M58 30 L60 110 L62 190 M42 110 L58 110"
+      tips: ["Face the camera, standing straight, feet a little apart.", "Arms slightly away from your body (about a hand's width).", "Wear fitted clothes, not loose ones.", "Step back only until the banner on the camera turns green (your whole body is in view). Standing further back than that makes the photo less accurate."]
     },
     side: {
       title: "Side photo",
-      tips: ["Turn a quarter turn so the camera sees your side.", "Arms straight down by your sides, not in front of your hips. Stand straight and look ahead.", "Same fitted clothes, same distance as the front photo.", "Head and feet must both be in view."],
-      path: "M50 14 a8 9 0 1 0 .01 0 M46 30 L44 110 L46 190 M54 30 L56 110 L54 190 M44 60 L58 62 M44 110 L58 108"
+      tips: ["Turn a quarter turn so the camera sees your side.", "Arms straight down by your sides, not in front of your hips. Stand straight and look ahead.", "Same fitted clothes, same distance as the front photo.", "Head and feet must both be in view."]
     }
   };
   var STEPS = ["consent", "height", "capture", "sending", "result", "error"];
-  var state = { heightCm: null, photos: {}, tilt: {}, view: "front", stream: null, facing: "environment",
-                tiltNow: null, pendingBlob: null, pendingTilt: null, orientationOn: false, retake: null, issues: [] };
+  // Default to the front camera on phones: you can see yourself while lining up. The back camera (with the
+  // wide lens, where the phone has one) needs less distance to fit a whole body, so it's still one tap away
+  // on "Switch camera" for anyone who wants that trade-off instead.
+  var state = { heightCm: null, photos: {}, view: "front", stream: null, facing: "user",
+                pendingBlob: null, retake: null, issues: [] };
 
   var order = { token: new URLSearchParams(location.search).get("order"), info: null, kept: false };
 
@@ -28,35 +29,12 @@
 
   // ---- consent: nothing touches the camera until this is accepted ----
   $("consent-box").addEventListener("change", function (e) { $("consent-btn").disabled = !e.target.checked; });
-  $("consent-btn").addEventListener("click", function () {
-    // iOS only grants motion access from a tap, so ask here.
-    var D = window.DeviceOrientationEvent;
-    if (D && typeof D.requestPermission === "function") {
-      D.requestPermission().then(startOrientation, function () {}).catch(function () {});
-    } else { startOrientation(); }
-    show("height", "Step 1 of 3");
-  });
+  $("consent-btn").addEventListener("click", function () { show("height", "Step 1 of 3"); });
 
-  function startOrientation() {
-    if (state.orientationOn || !window.DeviceOrientationEvent) return;
-    state.orientationOn = true;
-    window.addEventListener("deviceorientation", function (e) {
-      state.tiltNow = TF.tiltDegrees(e.beta, e.gamma);
-      renderTilt();
-    });
-  }
-
-  function renderTilt() {
-    var el = $("tilt"), t = state.tiltNow;
-    if (t === null) {
-      el.textContent = isLaptop() ? "Keep the laptop screen upright, so the camera looks straight at you and not up at the ceiling."
-                                  : "Tilt sensor not available. Keep the phone upright and level.";
-      el.className = "tilt";
-    }
-    else if (TF.isLevel(t)) { el.textContent = "Phone is level ✓"; el.className = "tilt ok"; }
-    else { el.textContent = "Hold the phone upright and level (off by " + Math.round(t) + "°)"; el.className = "tilt bad"; }
-    updateShoot();
-  }
+  // No live tilt readout: raw device-orientation angles aren't interpreted consistently enough across real
+  // phones to show a trustworthy number (one report read "87° off" on a phone that was level in its own
+  // photo). A wrong warning is worse than none, so this was removed rather than guessed at without a device
+  // to test against. The guide lines in the frame are the real reference.
 
   // ---- height ----
   document.querySelectorAll("input[name=unit]").forEach(function (r) {
@@ -82,12 +60,10 @@
     $("laptop-tip").hidden = !isLaptop();
     $("cap-tips").innerHTML = "";
     v.tips.forEach(function (t) { var li = document.createElement("li"); li.textContent = t; $("cap-tips").appendChild(li); });
-    $("silhouette").setAttribute("d", v.path);
     $("cap-error").textContent = "";
     showLive();
     show("capture", view === "front" ? "Step 2 of 3" : "Step 3 of 3");
     openCamera();
-    renderTilt();
   }
 
   function showLive() {
@@ -240,13 +216,12 @@
     var v = $("video"), size = TF.fitSize(v.videoWidth, v.videoHeight, 1600);
     var c = document.createElement("canvas"); c.width = size.w; c.height = size.h;
     c.getContext("2d").drawImage(v, 0, 0, size.w, size.h);
-    var tilt = state.tiltNow;
-    c.toBlob(function (blob) { if (blob) review(blob, tilt); }, "image/jpeg", 0.9);
+    c.toBlob(function (blob) { if (blob) review(blob); }, "image/jpeg", 0.9);
   }
 
   $("file").addEventListener("change", function (e) {
     var f = e.target.files[0]; if (!f) return;
-    review(f, null);
+    review(f);
   });
 
   // ---- live framing check: tells the person when their whole body is in view, so they don't stand further than needed ----
@@ -301,21 +276,20 @@
     }, "image/jpeg", 0.7);
   }
 
-  function review(blob, tilt) {
+  function review(blob) {
     stopFraming();
     var rf = $("review-framing"); rf.hidden = true;
     if (!framing.off) postFrame(blob).then(function (res) {  // check the photo itself too, so a cut-off one is caught before sending
       var m = TF.framingMessage(res.status); if (!m || state.pendingBlob !== blob) return;
       rf.hidden = false; rf.className = "framing " + m.level; rf.textContent = m.level === "warn" ? "This photo: " + m.text + " Retake it." : m.text;
     }).catch(function () {});
-    state.pendingBlob = blob; state.pendingTilt = tilt;
+    state.pendingBlob = blob;
     var img = $("preview");
     if (img.src) URL.revokeObjectURL(img.src);
     img.src = URL.createObjectURL(blob);
     img.hidden = false; $("video").hidden = true;
     $("live-controls").hidden = true; $("fallback").hidden = true; $("review-controls").hidden = false;
     $("inframe-box").checked = false; $("use").disabled = true;
-    $("cap-error").textContent = tilt !== null && !TF.isLevel(tilt) ? "The phone looked tilted when this photo was taken. Retake if the photo looks slanted." : "";
   }
   $("inframe-box").addEventListener("change", function (e) { $("use").disabled = !e.target.checked; });
 
@@ -324,7 +298,7 @@
   });
 
   $("use").addEventListener("click", function () {
-    state.photos[state.view] = state.pendingBlob; state.tilt[state.view] = state.pendingTilt;
+    state.photos[state.view] = state.pendingBlob;
     $("file").value = "";
     stopCamera();
     if (state.retake) {  // only the rejected photos are retaken
@@ -351,7 +325,6 @@
     fd.append("consent", "true");
     fd.append("locale", $("lang").value);
     if (order.token) { fd.append("order_token", order.token); fd.append("keep_photos", $("keep-box").checked ? "true" : "false"); }
-    ["front", "side"].forEach(function (v) { if (state.tilt[v] !== null && state.tilt[v] !== undefined) fd.append(v + "_tilt", String(state.tilt[v])); });
     var ctl = new AbortController(), timer = setTimeout(function () { ctl.abort(); }, 90000);
     fetch("/v1/measurements", { method: "POST", body: fd, signal: ctl.signal })
       .then(function (r) {
@@ -404,7 +377,7 @@
   function fail(msg) { stopCamera(); $("fatal-msg").textContent = msg; show("error", ""); }
 
   function reset() {
-    state.photos = {}; state.tilt = {}; state.heightCm = null; stopCamera(); show("height", "Step 1 of 3");
+    state.photos = {}; state.heightCm = null; stopCamera(); show("height", "Step 1 of 3");
   }
   $("retry").addEventListener("click", function () { state.photos.front && state.photos.side ? submit() : reset(); });
   $("again").addEventListener("click", reset);
