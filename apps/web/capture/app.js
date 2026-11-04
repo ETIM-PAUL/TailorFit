@@ -48,7 +48,11 @@
 
   function renderTilt() {
     var el = $("tilt"), t = state.tiltNow;
-    if (t === null) { el.textContent = "Tilt sensor not available. Keep the phone upright and level."; el.className = "tilt"; }
+    if (t === null) {
+      el.textContent = isLaptop() ? "Keep the laptop screen upright, so the camera looks straight at you and not up at the ceiling."
+                                  : "Tilt sensor not available. Keep the phone upright and level.";
+      el.className = "tilt";
+    }
     else if (TF.isLevel(t)) { el.textContent = "Phone is level ✓"; el.className = "tilt ok"; }
     else { el.textContent = "Hold the phone upright and level (off by " + Math.round(t) + "°)"; el.className = "tilt bad"; }
     updateShoot();
@@ -244,7 +248,10 @@
   });
 
   // ---- live framing check: tells the person when their whole body is in view, so they don't stand further than needed ----
-  var framing = { timer: null, busy: false, off: false };
+  var framing = { timer: null, busy: false, off: false, fails: 0 };
+  var CHECK_OFF = "The automatic framing check is off on this server. Keep your head below the top line and your feet above the bottom line.";
+  var NO_CHECK = "We can't check your framing right now. Keep your head below the top line and your feet above the bottom line.";
+  function showFraming(text, level) { var el = $("framing"); el.hidden = false; el.className = "framing " + level; el.textContent = text; }
 
   function postFrame(blob) {
     var fd = new FormData(); fd.append("frame", blob, "frame.jpg");
@@ -252,7 +259,10 @@
       if (!r.ok) {
         // Switch off only when the server has no model key; a one-off error or a busy model just means "try the next frame".
         return r.json().catch(function () { return {}; }).then(function (d) {
-          if (r.status === 503 && /API key/i.test(String(d.detail || ""))) framing.off = true;
+          if (r.status === 503 && /API key/i.test(String(d.detail || ""))) {
+            framing.off = true;
+            showFraming(CHECK_OFF, "info");
+          }
           throw new Error("framing " + r.status);
         });
       }
@@ -261,11 +271,12 @@
   }
   function startFraming() {
     stopFraming();
-    if (framing.off) return;
+    if (framing.off) return showFraming(CHECK_OFF, "info");
     framing.timer = setInterval(checkFraming, 2000); setTimeout(checkFraming, 500);
   }
   function stopFraming() {
     if (framing.timer) { clearInterval(framing.timer); framing.timer = null; }
+    framing.fails = 0;
     $("framing").hidden = true;
   }
   function checkFraming() {
@@ -277,10 +288,14 @@
     c.toBlob(function (blob) {
       if (!blob) { framing.busy = false; return; }
       postFrame(blob).then(function (res) {
-        var m = TF.framingMessage(res.status), el = $("framing");
+        framing.fails = 0;
+        var m = TF.framingMessage(res.status);
         if (!m || !state.stream) return;
-        el.hidden = false; el.className = "framing " + m.level; el.textContent = m.text;
-      }).catch(function () {}).then(function () { framing.busy = false; });
+        showFraming(m.text, m.level);
+      }).catch(function () {
+        // Say so after a few failures in a row, rather than leaving the customer guessing.
+        if (++framing.fails >= 3 && !framing.off && state.stream) showFraming(NO_CHECK, "info");
+      }).then(function () { framing.busy = false; });
     }, "image/jpeg", 0.7);
   }
 
