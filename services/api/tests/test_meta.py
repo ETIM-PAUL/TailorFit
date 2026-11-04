@@ -72,3 +72,30 @@ def test_timeout_is_retried():
 
     with pytest.raises(meta.MetaAPIError):
         client(handler, max_retries=1).check_photo("p", "u")
+
+
+def test_a_pasted_key_with_quotes_or_spaces_still_works(monkeypatch):
+    import httpx
+    from app import meta
+    seen = {}
+
+    def handler(request):
+        seen["auth"] = request.headers["authorization"]
+        return httpx.Response(200, json={"ok": True})
+    for raw in ('  "abc123"  ', "'abc123'\n", "abc123 "):
+        monkeypatch.setenv("MODEL_API_KEY", raw)
+        meta.MetaClient(transport=httpx.MockTransport(handler))._post("/responses", meta.SPARK, {})
+        assert seen["auth"] == "Bearer abc123", raw
+
+
+def test_refusals_are_logged_without_the_key(monkeypatch, caplog):
+    import httpx
+    from app import meta
+    monkeypatch.setenv("MODEL_API_KEY", "secret-key-123")
+    client = meta.MetaClient(transport=httpx.MockTransport(lambda r: httpx.Response(401, json={"error": {"message": "Invalid API key"}})))
+    with caplog.at_level("WARNING", logger="tailorfit.meta"):
+        try:
+            client._post("/responses", meta.SPARK, {})
+        except meta.MetaAPIError:
+            pass
+    assert "HTTP 401" in caplog.text and "Invalid API key" in caplog.text and "secret-key-123" not in caplog.text

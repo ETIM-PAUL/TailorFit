@@ -4,6 +4,7 @@ Request shapes follow the docs for /v1/responses and /v1/images/edits. Two thing
 NOT yet confirmed against a live key and are flagged below: the JSON layout of
 non-streaming /v1/responses output, and SAM mask raster decoding (phase 6).
 """
+import logging
 import os
 import random
 import re
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 import httpx
 
 BASE_URL = "https://api.meta.ai/v1"
+log = logging.getLogger("tailorfit.meta")  # warnings reach the server log (Render's Logs tab); the key is never logged
 SAM = "sam-3.1"
 SPARK = "muse-spark-1.3"
 IMAGE = "muse-image-1.0"
@@ -41,6 +43,8 @@ class MetaClient:
     def __init__(self, api_key: str | None = None, base_url: str = BASE_URL, max_retries: int = 3,
                  transport: httpx.BaseTransport | None = None, sleep=time.sleep):
         key = api_key or os.environ.get("MODEL_API_KEY") or os.environ.get("META_MODEL_API_KEY")
+        # A key pasted into a hosting dashboard often picks up spaces or quotes, which would make every call fail.
+        key = (key or "").strip().strip('"').strip("'").strip()
         if not key:
             raise MetaAPIError("MODEL_API_KEY is not set (META_MODEL_API_KEY also accepted)")
         self._http = httpx.Client(base_url=base_url, headers={"Authorization": f"Bearer {key}"}, transport=transport)
@@ -66,6 +70,7 @@ class MetaClient:
                     return r.json()
                 if r.status_code not in RETRY_STATUSES:
                     self.calls.append(Call(model, time.perf_counter() - start, attempts, False))
+                    log.warning("Meta API refused %s: HTTP %s %s", model, r.status_code, r.text[:300].replace("\n", " "))
                     raise MetaAPIError(f"{model} {r.status_code}: {r.text[:300]}", r.status_code)
                 last = MetaAPIError(f"{model} {r.status_code}", r.status_code)
                 if "Retry-After" in r.headers:
@@ -76,6 +81,7 @@ class MetaClient:
             backoff = 0.5 * 2 ** (attempts - 1) * (1 + random.random() * 0.25)
             self._sleep(max(backoff, delay or 0))
         self.calls.append(Call(model, time.perf_counter() - start, attempts, False))
+        log.warning("Meta API call to %s failed after %s attempts: %s", model, attempts, f"{last.__class__.__name__}: {last}"[:300])
         raise MetaAPIError(f"{model} failed after {attempts} attempts: {last}", getattr(last, "status", None))
 
     def _respond(self, model: str, text: str, image_url: str | list[str], metadata: dict | None = None,
