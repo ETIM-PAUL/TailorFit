@@ -16,7 +16,9 @@
   // wide lens, where the phone has one) needs less distance to fit a whole body, so it's still one tap away
   // on "Switch camera" for anyone who wants that trade-off instead.
   var state = { heightCm: null, photos: {}, view: "front", stream: null, facing: "user",
-                pendingBlob: null, retake: null, issues: [] };
+                pendingBlob: null, retake: null, issues: [], imageCapture: null };
+  // The server only benefits from photos up to this size (see services/api/app/images.py); no point sending more.
+  var CAPTURE_MAX_SIDE = 2048;
 
   var order = { token: new URLSearchParams(location.search).get("order"), info: null, kept: false };
 
@@ -92,11 +94,17 @@
       .then(function (s) {
         wide.active = useWide;
         state.stream = s; $("video").srcObject = s; $("fallback").hidden = true; $("video").hidden = false;
+        var track = s.getVideoTracks()[0];
         // Widest view the camera allows (where the browser supports zoom), so less distance is needed.
         try {
-          var track = s.getVideoTracks()[0], cap = track.getCapabilities && track.getCapabilities();
+          var cap = track.getCapabilities && track.getCapabilities();
           if (cap && cap.zoom && cap.zoom.min < 1) track.applyConstraints({ advanced: [{ zoom: cap.zoom.min }] }).catch(function () {});
         } catch (e) {}
+        // The live preview is often lower resolution than the camera's actual photo output (phones commonly stream
+        // video at a capped size for performance). Where the browser supports it, ImageCapture pulls a full-resolution
+        // still straight from the camera instead of a frame of that smaller preview - sharper, especially useful when
+        // standing far back to fit in frame means the body is only a small part of the picture.
+        try { state.imageCapture = window.ImageCapture ? new ImageCapture(track) : null; } catch (e) { state.imageCapture = null; }
         $("wide-wrap").hidden = !(wide.id && state.facing === "environment");
         var label = ""; try { label = s.getVideoTracks()[0].label || "default"; } catch (e) {}
         $("lens").textContent = "Camera in use: " + label;
@@ -152,6 +160,7 @@
     stopFraming();
     if (counting()) { clearInterval(timer.id); timer.id = null; $("count").hidden = true; $("flip").disabled = false; }
     if (state.stream) { state.stream.getTracks().forEach(function (t) { t.stop(); }); state.stream = null; }
+    state.imageCapture = null;
   }
 
   function updateShoot() {
@@ -161,7 +170,11 @@
     var ready = !!state.stream && $("video").videoWidth > 0;
     $("shoot").disabled = counting() ? false : !ready;
   }
-  $("video").addEventListener("loadedmetadata", updateShoot);
+  // Re-check readiness on more than one event: taking a photo can make the live preview blip (briefly
+  // reporting zero size) on some cameras, which would otherwise leave the button wrongly disabled with
+  // nothing to correct it afterward. Each of these re-reads the current state fresh, so whichever fires
+  // last simply wins, correctly.
+  ["loadedmetadata", "loadeddata", "canplay", "playing", "resize"].forEach(function (ev) { $("video").addEventListener(ev, updateShoot); });
 
   $("flip").addEventListener("click", function () {
     state.facing = state.facing === "environment" ? "user" : "environment"; openCamera();
@@ -213,10 +226,33 @@
   });
 
   function takePhoto() {
-    var v = $("video"), size = TF.fitSize(v.videoWidth, v.videoHeight, 1600);
+    if (state.imageCapture) {
+      state.imageCapture.takePhoto().then(resizeAndReview).catch(captureFromPreview);
+    } else {
+      captureFromPreview();
+    }
+  }
+
+  // Fallback, and the only option where ImageCapture isn't supported: a frame of the live preview, which on
+  // most phones is a smaller image than the camera's real photo output.
+  function captureFromPreview() {
+    var v = $("video"), size = TF.fitSize(v.videoWidth, v.videoHeight, CAPTURE_MAX_SIDE);
     var c = document.createElement("canvas"); c.width = size.w; c.height = size.h;
     c.getContext("2d").drawImage(v, 0, 0, size.w, size.h);
     c.toBlob(function (blob) { if (blob) review(blob); }, "image/jpeg", 0.9);
+  }
+
+  // A full-resolution photo from ImageCapture, resized down to what the server can use and re-encoded the
+  // same way as the fallback, so either path produces a consistent, correctly oriented JPEG.
+  function resizeAndReview(photoBlob) {
+    if (!window.createImageBitmap) return captureFromPreview();
+    createImageBitmap(photoBlob).then(function (bmp) {
+      var size = TF.fitSize(bmp.width, bmp.height, CAPTURE_MAX_SIDE);
+      var c = document.createElement("canvas"); c.width = size.w; c.height = size.h;
+      c.getContext("2d").drawImage(bmp, 0, 0, size.w, size.h);
+      bmp.close && bmp.close();
+      c.toBlob(function (blob) { if (blob) review(blob); else captureFromPreview(); }, "image/jpeg", 0.9);
+    }).catch(captureFromPreview);
   }
 
   $("file").addEventListener("change", function (e) {
