@@ -53,7 +53,8 @@
   <section id="step-capture" class="step" hidden>
     <h1 id="cap-title"></h1>
     <ul id="cap-tips"></ul>
-    <p id="laptop-tip" class="notice" hidden><strong>On a laptop?</strong> Put it at waist height (on a chair or a box), tilt the screen until the camera looks straight at you, not up, and stand 2 to 3 metres back. It's much easier on a phone: open this same link there.</p>
+    <p id="laptop-tip" class="notice" hidden><strong>On a laptop?</strong> Put it at waist height (on a chair or a box), tilt the screen until the camera looks straight at you, not up, and stand 2 to 3 metres back. It's much easier on a phone: open this same link there.
+      <button id="copy-for-phone" class="ghost" type="button">Copy link for my phone</button><span id="copy-msg" class="muted" role="status"></span></p>
     <div id="stage">
       <p id="framing" class="framing" hidden aria-live="polite"></p>
       <video id="video" playsinline muted autoplay></video>
@@ -82,7 +83,8 @@
       <button id="flip" class="ghost">Switch camera</button>
     </div>
     <div id="fallback" hidden>
-      <p>The camera isn't available, so use your phone's camera app instead.</p>
+      <p id="fallback-msg">The live camera isn't available here, so take the photo with your phone's camera app instead.</p>
+      <button id="cam-retry" class="ghost" hidden>Try the camera again</button>
       <label class="filebtn">Choose or take a photo<input id="file" type="file" accept="image/*" capture="environment"></label>
     </div>
     <div id="review-controls" hidden>

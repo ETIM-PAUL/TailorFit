@@ -57,6 +57,23 @@
   };
   function framingMessage(status) { var m = FRAMING[status]; return m ? { text: m[0], level: m[1] } : null; }
 
-  var api = { framingMessage: framingMessage, rejectionViews: rejectionViews, rejectionText: rejectionText, parseHeight: parseHeight, tiltDegrees: tiltDegrees, isLevel: isLevel, fitSize: fitSize, LEVEL_DEGREES: LEVEL_DEGREES };
+  // What to tell the customer when the live camera can't open (name = the browser's error name).
+  function cameraErrorText(name, android) {
+    if (name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError") {
+      return android
+        ? "The camera permission was blocked. On Android this happens when another app is drawing on the screen: close chat bubbles, screen recorders and night-light or screen-filter apps, then tap Try the camera again. Or take the photo with your camera app below."
+        : "Camera access was refused. Allow the camera for this site in your browser settings, then tap Try the camera again. Or take the photo with your camera app below.";
+    }
+    if (name === "NotReadableError" || name === "AbortError" || name === "TrackStartError") {
+      return "Another app is using the camera. Close it (a video call or another camera app), then tap Try the camera again.";
+    }
+    if (name === "NotFoundError" || name === "OverconstrainedError" || name === "DevicesNotFoundError") {
+      return "We couldn't find a camera. Take the photo with your camera app below.";
+    }
+    return "The live camera isn't available here, so take the photo with your phone's camera app instead.";
+  }
+  function canRetryCamera(name) { return !!name && name !== "NotFoundError" && name !== "DevicesNotFoundError"; }
+
+  var api = { cameraErrorText: cameraErrorText, canRetryCamera: canRetryCamera, framingMessage: framingMessage, rejectionViews: rejectionViews, rejectionText: rejectionText, parseHeight: parseHeight, tiltDegrees: tiltDegrees, isLevel: isLevel, fitSize: fitSize, LEVEL_DEGREES: LEVEL_DEGREES };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.TF = api;
 })(typeof window !== "undefined" ? window : this);

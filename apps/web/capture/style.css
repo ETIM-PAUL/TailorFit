@@ -65,3 +65,9 @@ td:nth-child(2) { font-size: 1.15rem; font-weight: 700; color: var(--indigo); }
 .conf { font-weight: 700; }
 .reason { display: block; font-weight: 400; font-size: .82rem; color: var(--muted); }
 .style-preview { width: 100%; border-radius: var(--radius-panel); display: block; margin: 12px 0; }
+
+/* Laptop: the wide live view breaks out of the phone column, centred on the page (width set from the camera in app.js). */
+.laptop #stage { left: 50%; transform: translateX(-50%); max-width: 92vw; }
+body.laptop { overflow-x: hidden; }
+#laptop-tip button { display: inline-block; width: auto; margin: 10px 0 0; padding: 9px 14px; font-size: .95rem; }
+#cam-retry { margin-top: 4px; }

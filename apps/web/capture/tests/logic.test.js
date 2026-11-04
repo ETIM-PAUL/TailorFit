@@ -44,3 +44,19 @@ test("framing: fine distances are green, cut-off bodies are warnings", () => {
   assert.strictEqual(framingMessage("no_person").level, "info");
 });
 test("framing: unknown status gives no message", () => assert.strictEqual(framingMessage("???"), null));
+
+const { cameraErrorText, canRetryCamera } = require("../logic.js");
+test("blocked camera on Android explains the overlay fix", () => {
+  const t = cameraErrorText("NotAllowedError", true);
+  assert.ok(/bubbles/.test(t) && /Try the camera again/.test(t));
+  assert.ok(!/bubbles/.test(cameraErrorText("NotAllowedError", false)));
+});
+test("camera busy and no camera get their own messages", () => {
+  assert.ok(/Another app is using the camera/.test(cameraErrorText("NotReadableError")));
+  assert.ok(/couldn't find a camera/.test(cameraErrorText("NotFoundError")));
+  assert.ok(/camera app/.test(cameraErrorText(undefined)));
+});
+test("retry is offered unless there is no camera at all", () => {
+  assert.ok(canRetryCamera("NotAllowedError") && canRetryCamera("NotReadableError"));
+  assert.ok(!canRetryCamera("NotFoundError") && !canRetryCamera(undefined));
+});

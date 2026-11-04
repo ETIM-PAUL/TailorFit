@@ -104,7 +104,9 @@
     var useWide = !!(wide.id && state.facing === "environment" && $("wide-box").checked);
     // Phones: ask for a tall picture (portrait). Laptop webcams are landscape, and asking them for a tall picture makes the
     // browser crop a narrow strip out of the middle, so ask for their full native view instead.
-    var size = isLaptop() ? { width: { ideal: 1920 }, height: { ideal: 1080 }, resizeMode: "none" } : { height: { ideal: 1920 } };
+    // Laptops: the camera's largest native mode, uncropped. That is usually the whole sensor; a widescreen mode would cut off
+    // the top and bottom, which is exactly the height we need.
+    var size = isLaptop() ? { width: { ideal: 4096 }, height: { ideal: 4096 }, resizeMode: "none" } : { height: { ideal: 1920 } };
     var video = Object.assign(useWide ? { deviceId: { exact: wide.id } } : { facingMode: state.facing }, size);
     navigator.mediaDevices.getUserMedia({ video: video, audio: false })
       .then(function (s) {
@@ -116,13 +118,18 @@
           if (cap && cap.zoom && cap.zoom.min < 1) track.applyConstraints({ advanced: [{ zoom: cap.zoom.min }] }).catch(function () {});
         } catch (e) {}
         $("wide-wrap").hidden = !(wide.id && state.facing === "environment");
-        try { $("lens").textContent = "Camera in use: " + (s.getVideoTracks()[0].label || "default"); } catch (e) {}
+        var label = ""; try { label = s.getVideoTracks()[0].label || "default"; } catch (e) {}
+        $("lens").textContent = "Camera in use: " + label;
+        $("video").onloadedmetadata = function () {
+          var v = $("video"); $("lens").textContent = "Camera in use: " + label + ", " + v.videoWidth + " x " + v.videoHeight;
+          sizeStage();
+        };
         $("live-controls").hidden = false; updateShoot();
         startFraming();
         if (!wide.probed) probeWide();
-      }, function () {
+      }, function (err) {
         if (useWide) { wide.id = null; $("wide-wrap").hidden = true; return openCamera(); }  // wide camera refused: use the normal one
-        useFallback();
+        useFallback(err && err.name);
       });
   }
 
@@ -139,8 +146,25 @@
     }).catch(function () {});
   }
   $("wide-box").addEventListener("change", function () { if (!counting()) openCamera(); });
+  $("cam-retry").addEventListener("click", function () { $("fallback").hidden = true; openCamera(); });
+  $("copy-for-phone").addEventListener("click", function () {
+    var done = function () { $("copy-msg").textContent = " Copied. Send it to yourself on WhatsApp and open it on your phone."; };
+    if (navigator.clipboard) navigator.clipboard.writeText(location.href).then(done, function () { $("copy-msg").textContent = " Copy this address: " + location.href; });
+    else $("copy-msg").textContent = " Copy this address: " + location.href;
+  });
+  if (isLaptop()) document.body.classList.add("laptop");
 
-  function useFallback() {
+  // On a laptop the live view gets as big as the screen allows (a webcam picture is wide, so the phone column is too small).
+  function sizeStage() {
+    var v = $("video"), st = $("stage");
+    if (!isLaptop() || !v.videoWidth) { st.style.width = ""; return; }
+    st.style.width = Math.round(Math.min(window.innerWidth * 0.92, 900, window.innerHeight * 0.72 * v.videoWidth / v.videoHeight)) + "px";
+  }
+  window.addEventListener("resize", sizeStage);
+
+  function useFallback(errName) {
+    $("fallback-msg").textContent = TF.cameraErrorText(errName, /android/i.test(navigator.userAgent));
+    $("cam-retry").hidden = !TF.canRetryCamera(errName);
     $("video").hidden = true; $("live-controls").hidden = true; $("fallback").hidden = false;
   }
 
@@ -199,6 +223,8 @@
     if (!delay) return takePhoto();
     try { timer.ctx = timer.ctx || new (window.AudioContext || window.webkitAudioContext)(); timer.ctx.resume(); } catch (e) { timer.ctx = null; }
     timer.left = delay; $("count").textContent = delay; $("count").hidden = false;
+    // On a laptop you watch from metres away: bring the live view (countdown and framing banner) to the middle of the screen.
+    if (isLaptop() && $("stage").scrollIntoView) $("stage").scrollIntoView({ block: "center", behavior: "smooth" });
     $("flip").disabled = true; $("shoot").textContent = "Cancel"; $("shoot").disabled = false;
     beep(600, 120);
     timer.id = setInterval(tick, 1000);
