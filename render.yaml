@@ -4,7 +4,11 @@ services:
     name: tailorfit
     runtime: docker
     plan: free            # free sleeps when idle and loses data on restart; use starter + the disk below to keep orders
-    region: frankfurt     # the closest Render region to Lagos
+    # Frankfurt was tried first as the closest Render region to Lagos, but Meta's Model API returned
+    # "model_not_found" for every call from there, with the same key and model names that work from a
+    # US-based request. Switched to a US region as the fix. If Meta later deploys these models more
+    # widely, Frankfurt would be faster for Nigerian users and worth trying again.
+    region: oregon
     healthCheckPath: /health
     autoDeploy: true
     envVars:
