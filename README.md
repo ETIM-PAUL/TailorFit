@@ -140,6 +140,14 @@ cd services/api && .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --por
 
 Open `http://localhost:8000`, click **Get started**, create an account, add a customer and open their link on your phone. The camera needs HTTPS on a phone, so test from a phone through an HTTPS tunnel (for example `cloudflared tunnel --url http://localhost:8000`). Without a model key the API runs with clearly marked demo numbers (`TAILORFIT_STUBS=1` forces this).
 
+### Deploy
+
+The repo includes a `Dockerfile` and a Render Blueprint (`render.yaml`). On Render: **New → Blueprint**, pick this repository,
+then fill in `MODEL_API_KEY` and `DEMO_PASSWORD` when asked. The free plan sleeps when idle and starts empty after a restart
+(the demo account rebuilds itself on first login). To keep real tailors' orders, use a paid plan and uncomment the disk in
+`render.yaml`. Any host that runs a Docker image works the same way: set `COOKIE_SECURE=1`, and `TRUSTED_PROXY_HOPS=1`
+behind one proxy.
+
 ### Tests
 
 430 automated tests across nine suites, run in CI on pushes to `main` and on pull requests:

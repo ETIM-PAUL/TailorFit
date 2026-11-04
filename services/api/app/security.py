@@ -55,12 +55,22 @@ _hits: dict[tuple[str, str], deque] = defaultdict(deque)
 
 
 def client_ip(request: Request) -> str:
-    """Real address. Behind our own tunnel or proxy every request arrives from loopback, so trust its forwarded header."""
+    """The visitor's real address, for rate limits and login lockouts.
+
+    - Behind a host's proxy (Render and similar), set TRUSTED_PROXY_HOPS to the number of proxies in front of the app.
+      Each proxy appends the address it saw to X-Forwarded-For, so the real visitor is that many entries from the
+      right; anything further left was written by the visitor and could be faked.
+    - Behind our own local tunnel every request arrives from loopback, so its forwarded header is trusted.
+    """
     direct = request.client.host if request.client else "?"
+    hops = int(os.environ.get("TRUSTED_PROXY_HOPS") or 0)
+    fwd = [p.strip() for p in (request.headers.get("x-forwarded-for") or "").split(",") if p.strip()]
+    if hops > 0:
+        return fwd[-hops] if len(fwd) >= hops else direct
     if direct in ("127.0.0.1", "::1"):
-        fwd = request.headers.get("cf-connecting-ip") or (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
-        if fwd:
-            return fwd
+        first = request.headers.get("cf-connecting-ip") or (fwd[0] if fwd else "")
+        if first:
+            return first
     return direct
 
 

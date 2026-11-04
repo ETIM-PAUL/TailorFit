@@ -1,0 +1,29 @@
+# Render Blueprint: New > Blueprint, pick this repo. Secrets marked sync: false are asked for when you create it.
+services:
+  - type: web
+    name: tailorfit
+    runtime: docker
+    plan: free            # free sleeps when idle and loses data on restart; use starter + the disk below to keep orders
+    region: frankfurt     # the closest Render region to Lagos
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: MODEL_API_KEY
+        sync: false
+      - key: DEMO_PASSWORD
+        sync: false
+      - key: DEMO_EMAIL
+        value: demo@tailorfit.app
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
+      - key: ALLOW_SIGNUP
+        value: "1"
+    # On a paid plan, keep orders and accounts across restarts:
+    # disk:
+    #   name: tailorfit-data
+    #   mountPath: /app/data
+    #   sizeGB: 1

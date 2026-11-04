@@ -109,7 +109,7 @@ def _set_cookie(request: Request, response: Response, token: str) -> None:
 
 
 def _client(request: Request) -> str:
-    return request.client.host if request.client else "?"
+    return security.client_ip(request)  # the real visitor behind a proxy, same as the rate limits
 
 
 class Signup(BaseModel):

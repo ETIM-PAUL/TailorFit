@@ -1,0 +1,15 @@
+# Never ship secrets, local data, virtual environments or planning docs in the image
+.env
+.env.*
+!.env.example
+data/
+docs/
+media/
+**/.venv*/
+**/node_modules/
+**/__pycache__/
+**/.pytest_cache/
+.git/
+.github/
+*.pem
+*.key

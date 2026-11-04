@@ -261,3 +261,19 @@ def test_pages_revalidate_so_updates_show_up_and_the_font_is_cached():
     assert font.status_code == 200 and "max-age" in font.headers["cache-control"]
     assert c.get("/health").headers["cache-control"] == "no-cache"
     assert c.get("/v1/styles").headers["cache-control"] == "no-store"
+
+
+def test_behind_a_hosting_proxy_the_real_visitor_is_counted_and_cant_be_faked(monkeypatch):
+    from starlette.requests import Request
+    from app import security
+
+    def req(xff, client="10.0.0.5"):
+        return Request({"type": "http", "headers": [(b"x-forwarded-for", xff.encode())] if xff else [], "client": (client, 1234),
+                        "method": "GET", "path": "/", "query_string": b"", "scheme": "http", "server": ("x", 80)})
+
+    monkeypatch.setenv("TRUSTED_PROXY_HOPS", "1")
+    assert security.client_ip(req("41.58.1.2")) == "41.58.1.2"                 # what Render's proxy saw
+    assert security.client_ip(req("1.2.3.4, 41.58.1.2")) == "41.58.1.2"       # a faked entry on the left is ignored
+    assert security.client_ip(req("")) == "10.0.0.5"
+    monkeypatch.delenv("TRUSTED_PROXY_HOPS")
+    assert security.client_ip(req("41.58.1.2")) == "10.0.0.5"                 # without the setting, the header isn't trusted
