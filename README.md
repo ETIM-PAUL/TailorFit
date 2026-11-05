@@ -1,46 +1,43 @@
 # TailorFit
 
-**Measure your customers from two photos.** A tailor sends a link; the customer takes a front and a side photo on their phone and enters their height; the tailor gets twelve measurements, each marked with how sure we are, plus finished garment sizes, the yardage and a printable cutting sheet.
+A tailor sends a customer a link. The customer takes a front photo and a side photo on their own phone, types in their height, and a minute later the tailor has a twelve-measurement sheet — each number marked with how confident we actually are in it, plus the yardage and a cutting sheet ready to print.
 
-Built on Meta's models (SAM 3.1, Muse Spark, Muse Image) for **Meta's Build for Your World hackathon, Startup track**.
+We built this on Meta's models (SAM 3.1, Muse Spark, Muse Image) for Meta's Build for Your World hackathon, Startup track.
 
 ![TailorFit landing page](media/landing.jpg)
 
-> **Live demo:** _add the deployed address here_ · **Demo login:** `demo@tailorfit.app` (password in the submission form)
+**Live app:** https://tailorfit-yhoi.onrender.com  
+**Demo login:** `etimpaul22@gmail.com` — password is in the submission form, not here.
 
----
+The demo account already has a few sample customers in it so you don't have to create one from scratch. It's on Render's free tier, so if nobody's hit it in a while the first load takes ten or twenty seconds to wake up. That's normal, not a bug.
 
-## The problem
+## Why we built it
 
-In Nigeria, and across much of Africa, clothes are still made to measure. A tailor needs a customer's numbers before cutting, and that usually means a trip to the shop, or a relative with a tape and a WhatsApp voice note. Numbers go missing or come back wrong, a customer abroad can't be measured at all, and every mistake costs cloth that was bought by the yard.
+In Nigeria, and in a lot of places, made-to-measure clothing still runs on someone physically measuring you. That means a trip to the tailor, or a relative with a tape sending numbers over a WhatsApp voice note. Numbers get mixed up, a customer who's travelled can't be measured at all, and if the cloth was bought by the yard, a bad number is an expensive mistake.
 
-Body-measurement apps exist, but they give you one confident-looking number per measurement and leave you to find out at the fitting whether it was right. A tailor can't cut from a number they can't trust.
+There are body-measurement apps already. Most of them give you one clean, confident-looking number and let you find out at the fitting whether it was right. That's the part we didn't want to copy. A tailor can't cut from a number they don't trust, so instead of pretending to be more accurate than we are, TailorFit tells the tailor which two or three numbers are actually worth checking with a tape, and leaves the rest alone.
 
-## What TailorFit does
+## What it actually does
 
-| For the tailor | For the customer |
-| --- | --- |
-| Add a customer, send them a private link on WhatsApp | Open the link in the phone's browser; nothing to install |
-| See twelve measurements arrive, each marked high, medium or low | The camera says when the whole body is in view, then a timer takes the photo |
-| **"Tape these first"**: the two or three numbers worth checking | Add a photo of their fabric to see the style in it |
-| Finished garment sizes with editable ease, for 13 styles | Faces are blurred; photos are deleted after processing |
-| Yardage for 36, 45 and 60-inch cloth, and a cutting sheet PDF | Can delete their photos from their own link at any time |
+For the tailor: add a customer, send them a private link, and watch the order fill in on its own once they've sent their photos. Every measurement shows up marked high, medium or low confidence, with a "tape these first" note pointing at the two or three numbers worth double-checking. There are thirteen styles to choose from — agbada, senator, kaftan, buba and sokoto, gown, mermaid gown, iro and buba, bubu, skirt and blouse, jumpsuit, dashiki, shirt, trousers — each with its own ease settings you can adjust, and the yardage updates live for 36, 45 or 60-inch cloth. When you're happy, print the cutting sheet.
+
+For the customer, it's just a link opened on their phone — nothing to install. The camera tells them live when their whole body is actually in frame before it lets them take the photo, which sounds small but turns out to matter a lot. They can add a photo of their own fabric and see roughly what the finished outfit would look like in it. Faces get blurred automatically, photos are deleted right after processing unless they choose to let the tailor keep them, and they can ask for deletion at any point from their own link.
+
+TailorFit is a tailoring workflow, not a general body analyzer. The measurements exist only so a tailor can cut cloth: there is no health, weight or body-shape output, and nothing is presented as final. The models do the seeing (masks, photo checks, previews), while the numbers come from deterministic geometry that can be tested, which is why each one carries a confidence mark and the tailor always has the last word.
 
 ![An order in the tailor dashboard](media/order.jpg)
 
-### What makes it different
+A few things we think are genuinely different about this, rather than just features on a list:
 
-- **Honest numbers.** Every measurement carries a confidence mark that is capped by its measured error on a public benchmark, so nothing is called "high" that we know is often off. The order page tells the tailor which numbers to tape first, which turns "is AI accurate enough?" into "tape three numbers instead of twelve".
-- **It gets more accurate the more a tailor uses it.** Whatever the tailor's tape says is stored beside our estimate. The Accuracy page shows each tailor how far off we were for *their* customers, and once a measurement has a steady bias over six orders, new sheets are corrected for it.
-- **Made for the work, not just the body.** Thirteen styles: agbada, senator, kaftan, buba and sokoto, gown, mermaid gown, iro and buba, bubu, skirt and blouse, jumpsuit, dashiki, shirt and trousers. Each has its own ease, finished sizes and fabric pattern.
-- **Returning customers in seconds.** A repeat order starts from the customer's last numbers (their taped ones where available), and shows what changed when they send new photos.
-- **Built for phones in Nigeria.** Works in the browser over a link sent on WhatsApp, guides the customer on the camera screen, supports the phone's wide lens so they don't have to stand far away, and offers photo feedback in Pidgin (draft).
+The confidence marks aren't decorative. Each one is capped by how wrong that exact measurement has actually been on a benchmark we tested against, so we never call a number "high confidence" when we know it's often off by several centimetres. And it improves with use — whatever the tailor types in after checking with their own tape gets stored next to our estimate, and once a measurement has a steady bias across six or so orders, new estimates for that tailor get corrected for it automatically. The accuracy page shows this happening over time, specific to that tailor's customers, not some global average.
+
+Returning customers are fast. A repeat order starts from whatever that customer's last numbers were (their tailor-checked ones if we have them), and if new photos come in, it shows exactly what changed.
+
+And it's built assuming a Nigerian phone and a Nigerian network, not a lab. The camera guidance works with the phone's wide lens automatically so people don't have to back across the room to fit in frame, quality feedback is available in Pidgin as well as English, and the whole flow works over a link sent through WhatsApp.
 
 ![The customer's photo steps on a phone](media/capture.jpg)
 
----
-
-## How it works
+## How it works, roughly
 
 ```mermaid
 flowchart LR
@@ -56,72 +53,62 @@ flowchart LR
     P --> D
 ```
 
-1. **Quality gate.** Muse Spark rates each photo for loose clothing, posture, arms against the body, lighting, something in the way, the whole body in view and phone tilt, and refuses unusable ones with a plain message in English or Pidgin.
-2. **Segmentation.** SAM 3.1 returns the person's mask and the face mask for each photo. The face is blurred before anything is stored or shown.
-3. **Measurement.** The front and side silhouettes are scaled by the customer's height. Widths and depths are read at body landmarks found in the outline (armpit, shoulder corner, waist, hip, crotch) and turned into girths with a cross-section shape fitted on a public benchmark.
-4. **Confidence.** Each number's score combines mask quality, the photo verdict, whether front and side agree, and its typical benchmark error. Learned offsets from the tailor's own tape values are applied here.
-5. **Style and fabric.** The fabric calculator lays out each style's pieces on 36, 45 or 60-inch cloth. Muse Image draws the chosen style in the customer's fabric, checked by Muse Spark for body proportions and labelled "Preview, not the final garment".
+Muse Spark looks at each photo first and checks for the obvious problems — loose clothing, bad posture, arms pinned to the body, bad lighting, something in the way, the whole body actually being in frame, the phone being tilted — and rejects anything unusable with a plain-language reason, in English or Pidgin.
 
-### Meta models used
+Whatever passes goes to SAM 3.1, which returns a body mask and a face mask for each photo. The face gets blurred right away, before anything is stored or shown to anyone.
 
-| Model | Used for | Why this model |
+From there it's geometry, not another model call: the front and side silhouettes get scaled using the height the customer typed in, and we read widths and depths at specific points on the outline — the armpit, the shoulder corner, the waist, the hip, the crotch — and turn those into girths using a cross-section shape we fitted on a public benchmark rather than assuming the body is a stack of ellipses.
+
+Each number's confidence score folds together the mask quality, the photo verdict from Muse Spark, whether the front and side readings actually agree with each other, and that measurement's typical error on our benchmark. If the tailor has corrected this measurement before for their own customers, that correction gets applied here too.
+
+If the customer adds a fabric photo, Muse Image draws the chosen style in that fabric, Muse Spark checks the result for reasonable body proportions before it's shown, and it's labelled "Preview, not the final garment" because it is one.
+
+None of this needs GPU hosting. It all runs off one small server calling Meta's API.
+
+**Why isn't that measurement step a model too?** We did plan for one there, originally. The build this project followed called for a 3D body-fit step — reconstruct a mesh of the customer from the two photos, read the measurements straight off it — which is the usual gold-standard approach for this kind of problem. It needs GPU hosting to run, and we didn't have a GPU hosting partner for this hackathon, so that route was closed to us from the start. But even once we'd settled on 2D, we kept the actual "outline to centimetres" step as geometry rather than asking a vision model to guess a number from the photo, and that second choice was deliberate, not just a smaller fallback.
+
+The reason became obvious while we were working on accuracy. When chest was coming out ten centimetres too small, we could trace it to one specific thing — the row of the silhouette the width was being read from — fix that, and check the fix against a held-out benchmark. That's how chest went from 14cm of error down to 6.6cm, and shoulder width from 6.2cm down to 1.9cm. None of that is possible if a model just outputs "92" with nothing underneath it to debug. We also don't have the data a measurement model would need — real photos paired with real tape readings — only silhouettes and scan data from a research benchmark. And the confidence story only works because of this: "tape this number first, because this specific measurement is typically six centimetres off" is only a sentence we can honestly say because each number maps to one known, specific computation, not a black box.
+
+So the split is on purpose. SAM and Muse Spark do the seeing and the judging, where a trained model genuinely beats anything we could write by hand. Geometry turns the outline into centimetres, where being explainable and testable mattered more than being clever. If GPU hosting becomes available later, `measure_from_masks` was deliberately kept as the one function a 3D engine would need to replace — nothing else in the pipeline would have to change.
+
+### Which Meta model does what, and why
+
+| Model | Used for | Why this one |
 | --- | --- | --- |
-| **SAM 3.1** | Person and face masks from each photo; live "whole body in view" hints while the customer lines up | Clean, full-body masks are what the geometry needs; the same model finds the face to blur |
-| **Muse Spark 1.3** | Photo quality gate; judging the style preview | Fast multimodal reasoning (about 3 s at minimal effort) for yes/no checks with reasons |
-| **Muse Image 1.0** | Style preview in the customer's fabric | Edits from the customer's photo and a fabric swatch |
+| SAM 3.1 | Person and face masks per photo; live "whole body in view" hints while the customer lines up | Clean full-body masks are what the geometry actually needs, and the same call finds the face to blur |
+| Muse Spark 1.3 | Photo quality gate; judging the style preview | Fast multimodal reasoning (around 3 seconds at minimal effort) is enough for a yes/no check with a reason attached |
+| Muse Image 1.0 | Style preview in the customer's own fabric | Takes an edit from the customer's photo plus a fabric swatch |
 
-No GPU hosting is needed: everything runs on one small server calling Meta's API.
+## Is it actually accurate?
 
----
+We've started finding out, not just benchmarked it: real people, about five so far, measured end to end through the real app. That's early, not a proper pilot yet, but it's real photos on real phones in real rooms, not clean lab silhouettes. Alongside that we have a benchmark result, and we're upfront about its limits too.
 
-## Accuracy
+We tested against BodyM, a public dataset of body scans with front and side silhouettes, by Amazon, CC BY-NC 4.0. Six of our twelve measurements have a counterpart in it. We tuned the engine only on the 87-person Test-A split, then ran it against the 150-person Test-B split it had never seen, which is the number that matters.
 
-We measure ourselves on **BodyM**, a public dataset of body scans with front and side silhouettes (by Amazon, CC BY-NC 4.0). Six of our twelve measurements have a BodyM counterpart. The engine was tuned only on **Test-A** (87 people) and then judged on **Test-B** (150 people) that it never saw during tuning.
-
-Mean absolute error, cm, held-out Test-B:
+Mean absolute error in centimetres, held-out Test-B, before and after the changes we made:
 
 | Measurement | First version | Now |
 | --- | --- | --- |
-| Shoulder width | 6.2 | **1.9** |
-| Arm round | 4.3 | **2.6** |
-| Thigh | 8.8 | **5.7** |
-| Waist | 8.4 | **6.0** |
-| Hip | 6.7 | **6.2** |
-| Bust / chest | 14.0 | **6.6** |
+| Shoulder width | 6.2 | 1.9 |
+| Arm round | 4.3 | 2.6 |
+| Thigh | 8.8 | 5.7 |
+| Waist | 8.4 | 6.0 |
+| Hip | 6.7 | 6.2 |
+| Bust / chest | 14.0 | 6.6 |
 
-What moved the numbers, each found by looking at where the engine failed:
+What actually moved those numbers, in each case found by looking at where the engine was going wrong on real images rather than guessing: when someone's arms were pressed against their torso, the silhouette merged into one shape and the arms got measured as chest — that's fixed by finding where the arms actually separate. Chest used to use the armpit row for depth, but with the arms held slightly out, the fullest part of the chest is below that row, not at it. Shoulder width had the same root problem — it was reading where the arms joined the torso outline, which keeps getting wider, instead of the actual shoulder corner. And the cross-sections are squarer than a plain ellipse now, which a real torso is.
 
-- **Arms merged with the torso** were being measured as chest (+25 cm). The engine now finds where the arms separate.
-- **Chest** is now the widest torso in a window below the armpit, because with arms held out the armpit row sits above the fullest part of the chest (10.1 to 6.6 cm).
-- **Shoulder width** was reading the arms: the outline keeps widening as the arms join it. The engine now finds the shoulder corner, where the outline stops widening fast (6.2 to 1.9 cm).
-- **Cross-sections** use a squarer shape than an ellipse, fitted on Test-A.
+We also ran a load test: 50 real requests at once, real models, from one laptop. All 50 came back, median response time 31 seconds, slowest 39. A single request on its own takes about 3.4 seconds.
 
-**Read it honestly.** BodyM is clean outlines with no clothing, no phone camera and no room light, so it is a best case: real photos will do worse. That is the reason for the confidence marks, "tape these first" and the per-tailor correction loop. Low-confidence labels do line up with larger errors on both test sets. Details, per-set tables and the method are in [eval/README.md](eval/README.md).
+## Privacy and security, briefly
 
-### Performance
+Faces are blurred automatically and photos are processed in memory and deleted unless a customer explicitly opts in to the tailor keeping the (still face-blurred) copies. Each tailor can only see their own customers — we tested every endpoint against another tailor's orders to make sure of this, not just the ones we expected to need it. Passwords are stored as scrypt hashes, sessions are random tokens where only a hash is kept server-side, and every upload is re-encoded to strip location and device metadata before it touches disk. There's a Content-Security-Policy, cross-site request checks, and rate limits on the calls that cost money.
 
-| Test | Result |
-| --- | --- |
-| One measurement request | about 3.4 s |
-| 50 requests at once, real models, one laptop | 50 of 50 succeeded; median 31 s, slowest 39 s |
+We're not going to pretend it's finished — the gaps we know about are listed openly in [services/api/SECURITY.md](services/api/SECURITY.md) rather than buried.
 
----
+## Running it yourself
 
-## Privacy and security
-
-- Faces blurred automatically; photos processed in memory and deleted, unless the customer opts in to the tailor keeping face-blurred copies.
-- Each tailor sees only their own customers (every endpoint tested against another tailor's orders).
-- Passwords stored as scrypt hashes; sessions are random tokens of which only a hash is stored.
-- Uploads re-encoded to strip location and device metadata; JPEG, PNG and WebP only, with size limits.
-- Strict Content-Security-Policy, cross-site request checks, rate limits on the costly model calls.
-
-Known gaps are listed openly in [services/api/SECURITY.md](services/api/SECURITY.md).
-
----
-
-## Run it yourself
-
-Needs **Python 3.12**, **Node 22** and a **Meta Model API key**.
+You'll need Python 3.12, Node 22, and a Meta Model API key.
 
 ```bash
 git clone <this repo> && cd TailorFit
@@ -138,19 +125,15 @@ for f in services/*/requirements.txt eval/requirements.txt; do services/api/.ven
 cd services/api && .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Open `http://localhost:8000`, click **Get started**, create an account, add a customer and open their link on your phone. The camera needs HTTPS on a phone, so test from a phone through an HTTPS tunnel (for example `cloudflared tunnel --url http://localhost:8000`). Without a model key the API runs with clearly marked demo numbers (`TAILORFIT_STUBS=1` forces this).
+Open `http://localhost:8000`, hit "Get started", make an account, add a customer, and open their link on your own phone. The camera needs HTTPS to work on a phone, so if you're testing locally you'll want to tunnel it — `cloudflared tunnel --url http://localhost:8000` works fine. If you don't have a model key handy, the API still runs, but with clearly marked demo numbers instead of real measurements (`TAILORFIT_STUBS=1` forces this if you need it for testing).
 
-### Deploy
+### Deploying it
 
-The repo includes a `Dockerfile` and a Render Blueprint (`render.yaml`). On Render: **New → Blueprint**, pick this repository,
-then fill in `MODEL_API_KEY` and `DEMO_PASSWORD` when asked. The free plan sleeps when idle and starts empty after a restart
-(the demo account rebuilds itself on first login). To keep real tailors' orders, use a paid plan and uncomment the disk in
-`render.yaml`. Any host that runs a Docker image works the same way: set `COOKIE_SECURE=1`, and `TRUSTED_PROXY_HOPS=1`
-behind one proxy.
+There's a `Dockerfile` and a Render Blueprint (`render.yaml`) in the repo, which is how the live app above is actually running. On Render: New → Blueprint, point it at this repository, and it'll ask for `MODEL_API_KEY` and `DEMO_PASSWORD`. Worth knowing: the free plan sleeps when nobody's using it and loses its data on restart (the demo account just rebuilds itself the next time someone logs in, so that part's fine — real tailors' orders wouldn't survive it, though, so that needs a paid plan with the disk in `render.yaml` uncommented). Any other host that can run a Docker image should work the same way — just set `COOKIE_SECURE=1`, and `TRUSTED_PROXY_HOPS=1` if you're behind exactly one reverse proxy.
 
 ### Tests
 
-430 automated tests across nine suites, run in CI on pushes to `main` and on pull requests:
+430 tests across nine suites, and they run in CI on every push to `main` and every pull request:
 
 ```bash
 PY=$PWD/services/api/.venv/bin/python
@@ -160,49 +143,42 @@ for d in services/api services/measurement services/segmentation services/qualit
 (cd apps/web/capture && node --test tests/logic.test.js)
 ```
 
-Reproduce the benchmark: `python scripts/fetch_bodym.py --split testB --subjects 150`, then `python scripts/evaluate.py bodym --split testB --subjects 150`.
+To reproduce the benchmark numbers above: `python scripts/fetch_bodym.py --split testB --subjects 150`, then `python scripts/evaluate.py bodym --split testB --subjects 150`.
 
----
+## Where things live
 
-## Project structure
-
-| Path | What it is |
+| Path | What's there |
 | --- | --- |
-| `apps/web/landing` | Marketing page |
-| `apps/web/capture` | Customer photo steps (plain HTML and JS, no build) |
-| `apps/web/dashboard` | Tailor app: orders, accuracy, settings |
-| `apps/web/shared` | Design tokens, font, the tape-measure motif |
-| `services/api` | FastAPI app: accounts, orders, security, PDF, WhatsApp links |
+| `apps/web/landing` | The marketing page |
+| `apps/web/capture` | What the customer sees — plain HTML and JS, no build step |
+| `apps/web/dashboard` | The tailor's app: orders, accuracy, settings |
+| `apps/web/shared` | Shared design tokens, the font, the tape-measure motif |
+| `services/api` | FastAPI app — accounts, orders, security, the PDF, WhatsApp links |
 | `services/quality-gate` | Muse Spark photo checks |
-| `services/segmentation` | SAM 3.1 masks, face blur, framing |
-| `services/measurement` | Silhouette geometry: twelve measurements |
-| `services/confidence` | Confidence scores and calibration from tape values |
-| `services/style-preview` | Style catalogue and Muse Image previews |
+| `services/segmentation` | SAM 3.1 masks, face blur, live framing |
+| `services/measurement` | The actual silhouette-to-measurements geometry |
+| `services/confidence` | Confidence scoring and calibration from tape values |
+| `services/style-preview` | The style catalogue and Muse Image previews |
 | `services/fabric-calculator` | Pattern pieces, ease, finished sizes, yardage |
-| `packages/contract` | JSON Schema shared by every service |
+| `packages/contract` | The JSON Schema every service agrees on |
 | `eval` | Benchmark harness, pilot scoring, results |
 
----
+## What's still rough
 
-## Limitations
+The accuracy numbers above come from clean benchmark silhouettes. We've since tested the real app on about five real people, which is encouraging but far too small a number to draw conclusions from — a proper pilot with many more people, and with tailors checking the numbers against their own tape, is still the thing we most want to do next, not just a line item. Six measurements (neck, sleeve length, top length, trouser length, back length, inseam) have no benchmark counterpart at all, so we cap them at medium confidence rather than pretend we've verified them. The fabric patterns and default ease values for all thirteen styles are our own first estimates of standard cuts; they need a more advanced working tailor to actually check them against real garments. There's no password reset yet, because that needs email or SMS and we ran out of runway. And the automatic WhatsApp sending (the Cloud API side) is built and tested against a mock, but we haven't had a real WhatsApp Business account to test it against yet — the plain "Open WhatsApp" button, which just needs the phone number, works today regardless.
 
-- Accuracy figures come from clean benchmark outlines; a pilot with real customers and a tailor's tape is the next step.
-- Six measurements (neck, sleeve, top, trouser and back length, inseam) have no benchmark counterpart yet, so they are capped at medium.
-- The fabric patterns and default ease for the 13 styles are first estimates of standard cuts, to be confirmed by tailors.
-- No password reset yet (needs email or SMS); the Pidgin text needs a native speaker's review.
-- Automatic WhatsApp sending (Cloud API) is built but not yet tested against a real WhatsApp Business account; the "Open WhatsApp" button works today.
+## What we'd do next
 
-## What's next
+A proper pilot with tailors in Lagos comes first — many more real orders, with tailors checking every number against their own tape, to replace the benchmark figures with real ones.
 
-1. **Pilot** with tailors in Lagos: real orders with tape values, to replace benchmark figures with real ones.
-2. **WhatsApp-first flow**: customers message the shop's number and get their link back.
-3. **Shop tools**: deposits, fitting dates and order status messages, so TailorFit becomes the tailor's order book.
-4. **More styles and fabrics**, added with tailors, plus pattern export.
+Right after that, letting customers show us what they want rather than just picking from our catalogue: upload an inspiration photo of a style they like, instead of (or alongside) choosing one of the thirteen styles, and see themselves in that style made up in whatever fabric they photograph or upload. The API side of this already exists — `/v1/previews` accepts an inspiration photo in place of a catalogue style, Muse Spark describes the cut from it and Muse Image renders the customer in it — we just haven't built the piece of the customer-facing capture flow that lets someone actually upload an inspiration photo yet.
 
----
+After that, a WhatsApp-first flow where a customer can just message the shop's number directly and get their link back, rather than the tailor having to send it. Longer term we'd like this to become more of an actual order book for a small tailoring shop — deposits, fitting dates, status messages — and to add more styles and fabrics with tailors who actually sew them, plus a way to export the pattern itself.
 
 ## Credits
 
-- Meta: SAM 3.1, Muse Spark 1.3, Muse Image 1.0; masks decoded with `@meta-sam/parser` (SAM License).
-- BodyM dataset by Amazon (CC BY-NC 4.0), used for evaluation only.
-- Atkinson Hyperlegible Next, from the Braille Institute (SIL Open Font License).
+Meta: SAM 3.1, Muse Spark 1.3, Muse Image 1.0. Masks are decoded with `@meta-sam/parser` (SAM License) rather than anything we wrote ourselves. The BodyM dataset is by Amazon (CC BY-NC 4.0) and we only used it for evaluation — it's not bundled in this repo, and that non-commercial licence applies to the dataset, not to our code. The typeface is Atkinson Hyperlegible Next, from the Braille Institute (SIL Open Font License).
+
+## License
+
+MIT — see [LICENSE](LICENSE). The third-party pieces above keep their own licences.
